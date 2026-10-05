@@ -1,0 +1,42 @@
+[
+  {
+    "version": 1,
+    "file": "001_initial_schema.sql",
+    "sha256": "d816e4be6a8852bd6f88d5208698a38a6605550157fe1d92ef6660443fe21fd5"
+  },
+  {
+    "version": 2,
+    "file": "002_message_header_cache.sql",
+    "sha256": "15d41386b2c59eae6f954afb5a313bb321714af1e780dcb71db956a2510ccb3d"
+  },
+  {
+    "version": 3,
+    "file": "003_fetch_live_status.sql",
+    "sha256": "bfe9d145ca6ac13aed7dc2b60da66035dfd9ff4f72b545dba1c24551a5576953"
+  },
+  {
+    "version": 4,
+    "file": "004_journal_conditions.sql",
+    "sha256": "3bfba36b4e1d7232b18620b718007bece58212a1f747f414dd7574a15a779de2"
+  },
+  {
+    "version": 5,
+    "file": "005_message_preview.sql",
+    "sha256": "995fcd958c729e66fad24ccfbf8f30570d841d451c53e85d4cd899c51b43b951"
+  },
+  {
+    "version": 6,
+    "file": "006_backup_bookkeeping.sql",
+    "sha256": "58a695fda70971a9235227e87328de94f293b5f4854b8e52bd9dc8dcc1e5c7c1"
+  },
+  {
+    "version": 7,
+    "file": "007_license_runtime.sql",
+    "sha256": "70bb5648b7cea8ebee36dd1c8eeab90657f8194834a45e9aa1efccabdb2ecbf0"
+  },
+  {
+    "version": 8,
+    "file": "008_monitoring.sql",
+    "sha256": "66b75bcf957d033c1d77476836407b15f72fb8fa2229ba7aef2ce2b1e2a2b4e0"
+  }
+]

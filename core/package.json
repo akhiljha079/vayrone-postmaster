@@ -1,0 +1,36 @@
+{
+  "name": "@vpm/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Mail engine: SMTP (submission + internal delivery), IMAP4rev1+IDLE, POP3, message store, UID allocator, delivery pipeline, rules engine.",
+  "dependencies": {
+    "@vpm/license-client": "*",
+    "archiver": "^8.0.0",
+    "basic-ftp": "^6.2.2",
+    "croner": "^10.0.1",
+    "iconv-lite": "^0.7.3",
+    "imapflow": "^2.2.5",
+    "ipaddr.js": "^2.5.0",
+    "libmime": "^5.4.7",
+    "mysql2": "^3.24.5",
+    "nodemailer": "^10.0.14",
+    "pino": "^10.4.0",
+    "selfsigned": "^5.5.0",
+    "smtp-server": "^3.19.17",
+    "zod": "^4.6.5"
+  },
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/main.ts",
+    "cli": "tsx src/cli-main.ts"
+  },
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./cli": "./src/cli.ts"
+  }
+}

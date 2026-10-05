@@ -1,0 +1,50 @@
+# Vayrone PostMaster with MariaDB (separate official image, GPLv2, unmodified).
+# Fill in the passwords (or use an .env file), then: docker compose up -d
+# Setup wizard: docker compose exec postmaster node /opt/vayrone-postmaster/app/vpm.mjs setup-token
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: vayrone_postmaster
+      MARIADB_USER: vpm
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--max-allowed-packet=128M"]
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      retries: 12
+
+  postmaster:
+    image: vayrone/postmaster:${VPM_VERSION:-latest}
+    restart: unless-stopped
+    # Containers do not expose stable hardware IDs; licences for container
+    # installs are bound to the host's /etc/machine-id.
+    hostname: ${VPM_HOSTNAME:-mail.example.local}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      VPM_DB_HOST: db
+      VPM_DB_PASSWORD: ${DB_PASSWORD}
+      VPM_HOSTNAME: ${VPM_HOSTNAME:-mail.example.local}
+    volumes:
+      - data:/data
+      - config:/config
+      - /etc/machine-id:/etc/machine-id:ro
+    ports:
+      - "443:8443"
+      - "587:2587"
+      - "465:2465"
+      - "143:2143"
+      - "993:2993"
+      - "110:2110"
+      - "995:2995"
+
+volumes:
+  db:
+  data:
+  config:

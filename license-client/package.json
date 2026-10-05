@@ -1,0 +1,24 @@
+{
+  "name": "@vpm/license-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "In-product licensing: Ed25519 verification, machine fingerprint, online/offline activation, enforcement, tamper checks.",
+  "dependencies": {
+    "@vpm/core": "*"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./format": "./src/format.ts",
+    "./fingerprint": "./src/fingerprint.ts",
+    "./protocol": "./src/protocol.ts",
+    "./update": "./src/update.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

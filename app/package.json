@@ -1,0 +1,21 @@
+{
+  "name": "@vpm/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "The single `vpm` executable: core (mail + web), worker, all, cli roles. Bundled for release by scripts/build-release.mjs.",
+  "main": "src/bin.ts",
+  "dependencies": {
+    "@vpm/core": "*",
+    "@vpm/license-client": "*",
+    "@vpm/server": "*",
+    "@vpm/worker": "*",
+    "pino": "^10.4.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/bin.ts"
+  }
+}

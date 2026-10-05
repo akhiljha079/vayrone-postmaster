@@ -1,0 +1,21 @@
+{
+  "workspaces": ["core", "server", "worker", "web", "license-client", "license-server"],
+  "allowed": [
+    "MIT",
+    "MIT-0",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "Apache-2.0",
+    "Zlib",
+    "Unlicense",
+    "CC0-1.0",
+    "BlueOak-1.0.0",
+    "Python-2.0"
+  ],
+  "approvedExceptions": {
+    "caniuse-lite": "CC-BY-4.0, build-time only (browserslist); not shipped",
+    "lightningcss*": "MPL-2.0, Vite/Tailwind build-time only; not shipped"
+  }
+}

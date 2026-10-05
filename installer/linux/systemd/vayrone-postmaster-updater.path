@@ -1,0 +1,10 @@
+# Starts the updater when the admin panel requests an update (Admin → Updates).
+[Unit]
+Description=Vayrone PostMaster update requests
+
+[Path]
+PathExists=/var/lib/vayrone-postmaster/updates/apply.json
+Unit=vayrone-postmaster-updater.service
+
+[Install]
+WantedBy=multi-user.target

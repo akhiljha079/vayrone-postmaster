@@ -1,0 +1,41 @@
+{
+  "name": "@vpm/license-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Vayrone License Server (separate hosted app): clients, plans, keys, activations, resellers, renewals, REST API.",
+  "main": "src/main.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/main.ts",
+    "cli": "tsx src/cli.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build": "tsc -p web/tsconfig.json --noEmit && vite build --config web/vite.config.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.5",
+    "@vpm/license-client": "*",
+    "croner": "^10.0.1",
+    "fastify": "^5.12.5",
+    "mysql2": "^3.24.5",
+    "nodemailer": "^10.0.14",
+    "pino": "^10.4.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.2"
+  }
+}

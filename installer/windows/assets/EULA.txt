@@ -1,0 +1,24 @@
+VAYRONE POSTMASTER — END USER LICENCE AGREEMENT
+[DRAFT — to be reviewed and replaced by Vayrone Infratech's legal adviser before release]
+
+Vayrone PostMaster ("the Software") is proprietary software of Vayrone Infratech,
+Agra, India ("Vayrone"). It is licensed, not sold.
+
+1. Licence. Subject to payment of the applicable fees, Vayrone grants the customer
+   named in the licence file a non-exclusive, non-transferable licence to install
+   and use the Software on the number of servers and for the number of users stated
+   in the licence, for the licence period.
+2. Restrictions. The customer shall not copy (except for backup), modify, reverse
+   engineer, decompile or disassemble the Software, circumvent its licence checks,
+   or rent, sublicense or redistribute it, except as permitted by applicable law.
+3. Third-party components. The Software includes open-source components that are
+   licensed under their own terms, listed in THIRD_PARTY_LICENSES.md. The bundled
+   MariaDB database server is licensed under the GNU GPL version 2; its source code
+   is available from https://mariadb.org/download/.
+4. Data. All mail and data processed by the Software remain the property of the
+   customer. Vayrone does not receive mail content. Licence activation sends the
+   company details entered in the setup wizard, a hashed machine fingerprint, the
+   product version and the number of active users to Vayrone.
+5. Support and updates are provided under a valid Annual Maintenance Contract.
+6. Warranty and liability. [To be completed by legal counsel.]
+7. Governing law. [To be completed by legal counsel.]

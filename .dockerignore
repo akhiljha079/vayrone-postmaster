@@ -1,0 +1,10 @@
+# Only the built release goes into the image.
+*
+!release/linux-x64/app
+!release/linux-x64/db
+!release/linux-x64/web
+!release/linux-x64/THIRD_PARTY_LICENSES.md
+!release/linux-x64/VERSION
+!release/linux-x64/README.txt
+!release/linux-x64/LEGAL.txt
+!installer/docker/entrypoint.sh

@@ -1,0 +1,69 @@
+# .deb and .rpm packages (nfpm: https://nfpm.goreleaser.com, MIT, build tool only).
+#   scripts/package-linux.sh builds release/linux-<arch> first, then runs nfpm.
+name: vayrone-postmaster
+arch: ${VPM_ARCH}
+platform: linux
+version: ${VPM_VERSION}
+release: 1
+section: mail
+priority: optional
+maintainer: Vayrone Infratech <support@vayrone.com>
+vendor: Vayrone Infratech
+homepage: https://vayrone.com/postmaster
+license: Proprietary
+description: |
+  Vayrone PostMaster by Vayrone Infratech — LAN mail server suite.
+  Fetches each employee's external mailbox into a local mailbox, serves it to
+  Outlook, Thunderbird and webmail with a LAN password, and relays outgoing
+  mail through one provider account.
+
+contents:
+  - src: ${VPM_RELEASE_DIR}/
+    dst: /opt/vayrone-postmaster/
+    type: tree
+  - src: /opt/vayrone-postmaster/bin/vpm
+    dst: /usr/bin/vpm
+    type: symlink
+  - src: installer/linux/systemd/vayrone-postmaster.service
+    dst: /usr/lib/systemd/system/vayrone-postmaster.service
+  - src: installer/linux/systemd/vayrone-postmaster-worker.service
+    dst: /usr/lib/systemd/system/vayrone-postmaster-worker.service
+  - src: installer/linux/systemd/vayrone-postmaster-updater.service
+    dst: /usr/lib/systemd/system/vayrone-postmaster-updater.service
+  - src: installer/linux/systemd/vayrone-postmaster-updater.path
+    dst: /usr/lib/systemd/system/vayrone-postmaster-updater.path
+  - dst: /etc/vayrone-postmaster
+    type: dir
+    file_info:
+      mode: 0750
+  - dst: /var/lib/vayrone-postmaster
+    type: dir
+    file_info:
+      mode: 0750
+
+scripts:
+  preinstall: installer/linux/scripts/preinstall.sh
+  postinstall: installer/linux/scripts/postinstall.sh
+  preremove: installer/linux/scripts/preremove.sh
+  postremove: installer/linux/scripts/postremove.sh
+
+overrides:
+  deb:
+    depends:
+      - adduser | passwd
+      - util-linux
+    recommends:
+      - mariadb-server | default-mysql-server | mysql-server
+  rpm:
+    depends:
+      - shadow-utils
+      - util-linux
+    recommends:
+      - mariadb-server
+
+deb:
+  fields:
+    Bugs: mailto:support@vayrone.com
+rpm:
+  group: System Environment/Daemons
+  summary: Vayrone PostMaster LAN mail server suite

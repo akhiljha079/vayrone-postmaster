@@ -1,0 +1,10 @@
+{
+  "installId": "replace-with-random-hex",
+  "hostname": "mail.example.lan",
+  "dataPath": "./data",
+  "migrationsPath": "../db",
+  "listenHost": "0.0.0.0",
+  "ports": { "submission": 587, "smtps": 465, "imap": 143, "imaps": 993, "pop3": 110, "pop3s": 995 },
+  "allowPlaintextAuth": true,
+  "db": { "host": "127.0.0.1", "port": 3306, "user": "vpm", "password": "change-me", "database": "vayrone_postmaster" }
+}

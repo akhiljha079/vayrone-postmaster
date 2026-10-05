@@ -1,0 +1,16 @@
+# Applies a verified update: database snapshot, stop services, replace program
+# files, start, health check; rolls back automatically on failure. Root is
+# needed to replace /opt/vayrone-postmaster and to restart the services.
+[Unit]
+Description=Vayrone PostMaster updater
+After=mariadb.service mysqld.service mysql.service
+
+[Service]
+Type=oneshot
+User=root
+Environment=VPM_CONFIG=/etc/vayrone-postmaster/vpm.config.json
+ExecStart=/opt/vayrone-postmaster/bin/vpm update-apply
+TimeoutStartSec=45min
+UMask=0022
+PrivateTmp=yes
+NoNewPrivileges=yes

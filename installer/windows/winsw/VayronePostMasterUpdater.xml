@@ -1,0 +1,23 @@
+<!-- WinSW service definition. Applies updates requested in Admin → Updates:
+     database snapshot, stop services, replace program files, health check,
+     automatic rollback. Exits with 75 after replacing vpm.exe, so WinSW
+     restarts it on the new version. -->
+<service>
+  <id>VayronePostMasterUpdater</id>
+  <name>Vayrone PostMaster Updater</name>
+  <description>Vayrone PostMaster by Vayrone Infratech: installs updates requested from the admin panel.</description>
+  <executable>%BASE%\..\bin\vpm.exe</executable>
+  <arguments>updater</arguments>
+  <workingdirectory>%BASE%\..</workingdirectory>
+  <env name="VPM_CONFIG" value="@CONFIG@" />
+  <env name="NODE_ENV" value="production" />
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="5 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>10 sec</stoptimeout>
+  <logpath>@LOGS@</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>2048</sizeThreshold>
+    <keepFiles>4</keepFiles>
+  </log>
+</service>

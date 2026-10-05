@@ -1,0 +1,26 @@
+<!-- WinSW service definition (MIT, https://github.com/winsw/winsw).
+     @CONFIG@ and @LOGS@ are filled in by the installer. -->
+<service>
+  <id>VayronePostMasterWorker</id>
+  <name>Vayrone PostMaster Worker</name>
+  <description>Vayrone PostMaster by Vayrone Infratech: background worker (external mailbox fetching, outgoing relay queue, backups).</description>
+  <executable>%BASE%\..\bin\vpm.exe</executable>
+  <arguments>worker</arguments>
+  <workingdirectory>%BASE%\..</workingdirectory>
+  <env name="VPM_CONFIG" value="@CONFIG@" />
+  <env name="NODE_ENV" value="production" />
+  <depend>VayronePostMasterDB</depend>
+  <startmode>Automatic</startmode>
+  <!-- Any non-zero exit restarts the service; exit code 75 is the setup wizard
+       asking for a restart with new ports / certificate. -->
+  <onfailure action="restart" delay="3 sec" />
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>60 sec</stoptimeout>
+  <logpath>@LOGS@</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>

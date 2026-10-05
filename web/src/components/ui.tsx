@@ -1,0 +1,272 @@
+import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { ApiError } from '../api';
+
+const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
+
+// ---------------------------------------------------------------- buttons
+type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
+const VARIANT: Record<Variant, string> = {
+  primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-600/50',
+  secondary: 'bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 disabled:text-slate-400',
+  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-600/50',
+  ghost: 'text-slate-600 hover:bg-slate-100 disabled:text-slate-300',
+};
+
+export function Button({ variant = 'primary', busy, className, children, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; busy?: boolean }) {
+  return (
+    <button
+      type="button"
+      {...p}
+      disabled={p.disabled || busy}
+      className={cx('inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed', VARIANT[variant], className)}
+    >
+      {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+      {children}
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------- inputs
+export function Field({ label, hint, error, children, className }: { label: string; hint?: ReactNode; error?: string | null; children: ReactNode; className?: string }) {
+  return (
+    <label className={cx('block', className)}>
+      <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span>
+      {children}
+      {hint && !error && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+      {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
+    </label>
+  );
+}
+
+const inputCls = 'block w-full rounded-md border-0 px-2.5 py-1.5 text-sm text-slate-900 ring-1 ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500';
+
+export function Input(p: InputHTMLAttributes<HTMLInputElement>) {
+  return <input {...p} className={cx(inputCls, p.className)} />;
+}
+
+export function Textarea(p: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return <textarea {...p} className={cx(inputCls, 'font-mono', p.className)} />;
+}
+
+export function Select({ children, ...p }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select {...p} className={cx(inputCls, 'pr-8', p.className)}>
+      {children}
+    </select>
+  );
+}
+
+export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode; disabled?: boolean }) {
+  return (
+    <label className={cx('flex items-center gap-2 text-sm', disabled ? 'text-slate-400' : 'text-slate-700')}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={cx('relative h-5 w-9 shrink-0 rounded-full transition', checked ? 'bg-brand-600' : 'bg-slate-300')}
+      >
+        <span className={cx('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition', checked ? 'left-[18px]' : 'left-0.5')} />
+      </button>
+      {label}
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------- layout
+export function Card({ title, actions, children, className }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section className={cx('rounded-lg bg-white shadow-sm ring-1 ring-slate-200', className)}>
+      {(title || actions) && (
+        <header className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+          <div className="flex items-center gap-2">{actions}</div>
+        </header>
+      )}
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+      </div>
+      {actions && <div className="flex items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+const BADGE: Record<string, string> = {
+  green: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+  red: 'bg-red-50 text-red-700 ring-red-600/20',
+  amber: 'bg-amber-50 text-amber-800 ring-amber-600/20',
+  blue: 'bg-brand-50 text-brand-700 ring-brand-600/20',
+  slate: 'bg-slate-100 text-slate-600 ring-slate-500/20',
+};
+export function Badge({ color = 'slate', children }: { color?: keyof typeof BADGE; children: ReactNode }) {
+  return <span className={cx('inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset', BADGE[color])}>{children}</span>;
+}
+
+export function ErrorBanner({ error }: { error: unknown }) {
+  if (!error) return null;
+  const msg = error instanceof ApiError || error instanceof Error ? error.message : String(error);
+  return <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">{msg}</div>;
+}
+
+export function Empty({ children }: { children: ReactNode }) {
+  return <div className="py-10 text-center text-sm text-slate-500">{children}</div>;
+}
+
+export function Spinner() {
+  return (
+    <div className="flex justify-center py-10">
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+    </div>
+  );
+}
+
+export function Table({ head, children }: { head: ReactNode[]; children: ReactNode }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-slate-200 text-sm">
+        <thead>
+          <tr>
+            {head.map((h, i) => (
+              <th key={i} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+export const Td = ({ className, ...p }: React.TdHTMLAttributes<HTMLTableCellElement>) => <td {...p} className={cx('px-3 py-2 align-top', className)} />;
+
+// ---------------------------------------------------------------- modal
+export function Modal({ open, title, onClose, children, footer, wide }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    ref.current?.querySelector<HTMLElement>('input,select,textarea')?.focus();
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-10" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cx('w-full rounded-lg bg-white shadow-xl', wide ? 'max-w-3xl' : 'max-w-lg')}>
+        <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+          <h2 className="font-semibold text-slate-900">{title}</h2>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+            ✕
+          </button>
+        </header>
+        <div className="space-y-4 px-5 py-4">{children}</div>
+        {footer && <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">{footer}</footer>}
+      </div>
+    </div>
+  );
+}
+
+/** Promise-based confirm dialog. */
+export function useConfirm(): [(msg: string, opts?: { danger?: boolean; confirmLabel?: string }) => Promise<boolean>, ReactNode] {
+  const [s, setS] = useState<{ msg: string; danger: boolean; label: string; resolve: (v: boolean) => void } | null>(null);
+  const ask = useCallback(
+    (msg: string, opts: { danger?: boolean; confirmLabel?: string } = {}) =>
+      new Promise<boolean>((resolve) => setS({ msg, danger: opts.danger ?? true, label: opts.confirmLabel ?? 'Confirm', resolve })),
+    [],
+  );
+  const close = (v: boolean) => {
+    s?.resolve(v);
+    setS(null);
+  };
+  const node = (
+    <Modal
+      open={!!s}
+      title="Please confirm"
+      onClose={() => close(false)}
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => close(false)}>
+            Cancel
+          </Button>
+          <Button variant={s?.danger ? 'danger' : 'primary'} onClick={() => close(true)}>
+            {s?.label}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-slate-700">{s?.msg}</p>
+    </Modal>
+  );
+  return [ask, node];
+}
+
+// ---------------------------------------------------------------- data hook
+export function useResource<T>(loader: () => Promise<T>, deps: unknown[] = []): { data: T | null; error: unknown; loading: boolean; reload: () => void } {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [loading, setLoading] = useState(true);
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    loader().then(
+      (d) => {
+        if (!live) return;
+        setData(d);
+        setError(null);
+        setLoading(false);
+      },
+      (e) => {
+        if (!live) return;
+        setError(e);
+        setLoading(false);
+      },
+    );
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, n]);
+  return { data, error, loading, reload: () => setN((x) => x + 1) };
+}
+
+/** Runs an async action, tracking busy/error state for forms. */
+export function useAction<A extends unknown[]>(fn: (...a: A) => Promise<unknown>): { run: (...a: A) => Promise<boolean>; busy: boolean; error: unknown; setError: (e: unknown) => void } {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const run = async (...a: A) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn(...a);
+      return true;
+    } catch (e) {
+      setError(e);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { run, busy, error, setError };
+}
+
+export function generatePassword(len = 14): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789#@%+';
+  const buf = new Uint32Array(len);
+  crypto.getRandomValues(buf);
+  let p = Array.from(buf, (x) => chars[x % chars.length]).join('');
+  if (!/\d/.test(p)) p = p.slice(0, -1) + '7';
+  return p;
+}

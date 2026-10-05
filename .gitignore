@@ -1,0 +1,30 @@
+node_modules/
+dist/
+build/
+out/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+
+# Never commit or ship these
+*.map
+*.pem
+*.key
+*.jsc
+signing-keys/
+license-server/keys/
+
+# Local runtime data
+data/
+backups/
+tmp/
+
+.DS_Store
+Thumbs.db
+.cache/
+vpm.config.json
+
+# Release builds (scripts/build-release.mjs)
+release/

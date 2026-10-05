@@ -1,0 +1,44 @@
+# Vayrone PostMaster — mail server (SMTP/IMAP/POP3) and HTTPS web admin.
+[Unit]
+Description=Vayrone PostMaster mail server and web admin
+Documentation=file:///opt/vayrone-postmaster/README.txt
+After=network-online.target mariadb.service mysqld.service mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vpm
+Group=vpm
+Environment=VPM_CONFIG=/etc/vayrone-postmaster/vpm.config.json
+Environment=NODE_ENV=production
+# Root-only hardware serials for the licence fingerprint ("+" = run as root).
+ExecStartPre=+/opt/vayrone-postmaster/bin/vpm hwid --write /run/vayrone-postmaster/hwid
+ExecStart=/opt/vayrone-postmaster/bin/vpm core
+# Always restart, including exit code 75 ("restart with new settings" from the setup wizard).
+Restart=always
+RestartSec=3
+TimeoutStopSec=30
+LimitNOFILE=65536
+UMask=0027
+RuntimeDirectory=vayrone-postmaster
+RuntimeDirectoryPreserve=yes
+# Ports below 1024 (443, 465, 587, 143, 993, 110, 995) without running as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vayrone-postmaster
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

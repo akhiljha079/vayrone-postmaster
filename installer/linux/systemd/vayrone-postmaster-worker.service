@@ -1,0 +1,43 @@
+# Vayrone PostMaster — background worker: external mailbox fetcher, outbound
+# relay queue, backups, retention, licence check-in.
+[Unit]
+Description=Vayrone PostMaster worker (fetching, relay queue, backups)
+Documentation=file:///opt/vayrone-postmaster/README.txt
+After=network-online.target mariadb.service mysqld.service mysql.service vayrone-postmaster.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vpm
+Group=vpm
+Environment=VPM_CONFIG=/etc/vayrone-postmaster/vpm.config.json
+Environment=NODE_ENV=production
+ExecStartPre=+/opt/vayrone-postmaster/bin/vpm hwid --write /run/vayrone-postmaster/hwid
+ExecStart=/opt/vayrone-postmaster/bin/vpm worker
+Restart=always
+RestartSec=3
+TimeoutStopSec=60
+LimitNOFILE=65536
+UMask=0027
+RuntimeDirectory=vayrone-postmaster
+RuntimeDirectoryPreserve=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+# Backups go to the data folder or to mounted disks/shares under /mnt, /media,
+# /srv or /backup. Other folders: systemctl edit vayrone-postmaster-worker
+#   [Service]
+#   ReadWritePaths=/your/backup/folder
+ReadWritePaths=/var/lib/vayrone-postmaster -/mnt -/media -/srv -/backup
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
