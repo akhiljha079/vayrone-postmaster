@@ -24,13 +24,16 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: sudo apt-get update -qq && sudo apt-get install -y mariadb-server && sudo systemctl start mariadb
+      # root uses unix_socket auth (OS root only); the tests run as "runner", so give them their own login.
+      - run: sudo mariadb -e "CREATE USER 'vpmtest'@'localhost' IDENTIFIED BY 'vpmtest'; GRANT ALL PRIVILEGES ON *.* TO 'vpmtest'@'localhost' WITH GRANT OPTION;"
       - run: npm ci
       - run: npm run license-audit
       - run: npm run typecheck --workspaces --if-present
       - run: npm test --workspaces --if-present
         env:
           VPM_TEST_DB_SOCKET: /run/mysqld/mysqld.sock
-          VPM_TEST_DB_USER: root
+          VPM_TEST_DB_USER: vpmtest
+          VPM_TEST_DB_PASSWORD: vpmtest
 
   build:
     needs: test
