@@ -181,6 +181,14 @@ export class MailStore {
     return { id: r.insertId, size: raw.length, parsed, raw };
   }
 
+  /** Loads a stored message by id (quarantine release, restores). */
+  async getMessage(id: number): Promise<StoredMessage | null> {
+    const r = await one<{ id: number; storage_path: string; codec: number }>(this.db, 'SELECT id, storage_path, codec FROM messages WHERE id = ?', [id]);
+    if (!r) return null;
+    const raw = await this.loadRaw(r);
+    return { id: r.id, size: raw.length, parsed: parseMessage(raw), raw };
+  }
+
   async loadRaw(item: { storage_path: string; codec: number }): Promise<Buffer> {
     return this.blobs.get(item.storage_path, item.codec);
   }

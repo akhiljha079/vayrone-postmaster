@@ -17,7 +17,7 @@ export interface DeliveryTarget {
   message?: StoredMessage;
 }
 
-export type DeliveryStatus = 'delivered' | 'duplicate' | 'overquota' | 'failed' | 'discarded' | 'rejected';
+export type DeliveryStatus = 'delivered' | 'duplicate' | 'overquota' | 'failed' | 'discarded' | 'rejected' | 'quarantined';
 
 export interface DeliveryOutcome {
   userId: number;

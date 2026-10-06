@@ -197,7 +197,7 @@ describe.skipIf(!dbConfig())('mail flow: rules, forwarding, auto-reply, journali
     await exec(core.ctx.db, "INSERT INTO journal_rules (name, direction, scope, include_internal, target_address, created_at) VALUES ('all out','out','all',0,'archive@vault.test',?)", [new Date()]);
     const t = nodemailer.createTransport({ host: '127.0.0.1', port: core.ports.submission!, secure: false, auth: { user: sender.email, pass: PW }, tls: { rejectUnauthorized: false } });
 
-    await expect(t.sendMail({ from: sender.email, to: 'buyer@outside.test', subject: 'tool', text: 'x', attachments: [{ filename: 'setup.exe', content: 'MZ' }] })).rejects.toThrow(/550.*Executable/);
+    await expect(t.sendMail({ from: sender.email, to: 'buyer@outside.test', subject: 'tool', text: 'x', attachments: [{ filename: 'setup.exe', content: 'MZ' }] })).rejects.toThrow(/550.*(Executable|Blocked attachment type: setup\.exe)/);
 
     const jBefore = (await queue('journal')).length;
     await t.sendMail({ from: sender.email, to: ['buyer@outside.test', colleague.email], subject: 'Proposal', text: 'see attached' });

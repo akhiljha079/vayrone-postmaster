@@ -101,7 +101,36 @@ When the archive is enabled, every incoming and outgoing message is kept for the
   - **No re-download:** message identities are kept, so Outlook does not download everything again.
 - **Full server restore** (new hardware, disaster): see [upgrade-guide.md](upgrade-guide.md#restoring-a-whole-server).
 
-## 9. Security
+## 9. Spam, viruses and attachments
+
+**Admin → Spam & quarantine** has three tabs.
+
+**Settings**
+
+| Setting | Effect |
+|---------|--------|
+| Spam check | *Built-in* (default) or *Rspamd* (if installed). Mail scoring at or above the Junk score (default 6) goes to the recipient's **Junk** folder. An optional higher score holds it in quarantine instead. |
+| Virus scan | *Off* or *ClamAV* (socket or 127.0.0.1:3310). *Test with the EICAR test file* checks the scanner. If the scanner is down, mail is delivered and an alert is raised (default), or held. |
+| Blocked attachments | File types that are never delivered (`.exe`, `.js`, `.scr`, `.bat`, …), including inside ZIP files. Applies to incoming, internal and outgoing mail. |
+| Quarantine days | Held messages are deleted after this many days (default 30). |
+| Notify recipients | Recipients get a short "Message held for safety" notice. |
+
+- **Outgoing mail** that fails a check is not sent: the sender's mail program shows the reason.
+- **Incoming mail** that fails is held in quarantine; nothing is lost.
+
+**Quarantine**
+
+- Lists held messages with the reason, sender and recipients.
+- *View* shows headers and attachment names only.
+- *Release* delivers the message to its recipients. A message held for a **virus** can only be released by a super administrator.
+- *Delete* removes it.
+
+**Senders**
+
+- Company-wide **allow** and **block** lists (address or `@domain`).
+- When a user clicks *Junk* or *Not junk* in webmail, the sender is added to that user's own list.
+
+## 10. Security
 
 | Setting | Effect |
 |---------|--------|
@@ -116,7 +145,7 @@ When the archive is enabled, every incoming and outgoing message is kept for the
   - **Mail log:** every delivery, relay attempt, rejection and bounce.
   - **Audit log:** every admin action. It is tamper-evident (hash-chained) and checked every night.
 
-## 10. Licence
+## 11. Licence
 
 **Admin → Licence** shows:
 
@@ -131,7 +160,7 @@ When the archive is enabled, every incoming and outgoing message is kept for the
 | Moving to new hardware | *Move licence to another server* on the old server, then activate the key on the new one. |
 | Licence expired | 15 days of grace with a banner. After that, the admin panel is read-only and new webmail sign-ins are blocked. **Mail keeps flowing in every case.** |
 
-## 11. Updates
+## 12. Updates
 
 **Admin → Updates** (super admin).
 
@@ -152,11 +181,11 @@ If anything fails, the previous version and database are put back automatically.
 
 Updates released after the AMC end date need a renewed AMC.
 
-## 12. Company and branding
+## 13. Company and branding
 
 **Admin → Company:** company name, address, GSTIN, contact and logo (PNG, JPEG or WebP, up to 512 KB). They appear on the sign-in page and in the top bar.
 
-## 13. Everyday checklist
+## 14. Everyday checklist
 
 - **Daily:** Dashboard alerts; System health all green.
 - **Weekly:** Backups list shows *verified* runs; the outgoing queue is empty or moving; External mailboxes have no errors.

@@ -8,6 +8,8 @@ import { JobRunner } from './jobs.js';
 import { Scheduler, jobHandlers } from './scheduler.js';
 
 export interface RunningWorker {
+  /** Run due jobs now (Redis adapter: a job was just queued elsewhere). */
+  nudge(): void;
   stop(): Promise<void>;
 }
 
@@ -22,6 +24,7 @@ export async function startWorker(ctx: CoreContext, license: LicenseManager | nu
   await scheduler.start();
   ctx.log.info({ pollMs: ctx.config.worker.pollMs, fetchConcurrency: ctx.config.worker.fetchConcurrency }, 'worker role started');
   return {
+    nudge: () => void jobs.tick().catch((err) => ctx.log.error({ err }, 'job run failed')),
     async stop() {
       scheduler.stop();
       await Promise.all([sender.stop(), fetcher.stop(), jobs.stop()]);

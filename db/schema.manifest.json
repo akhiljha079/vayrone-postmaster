@@ -38,5 +38,10 @@
     "version": 8,
     "file": "008_monitoring.sql",
     "sha256": "66b75bcf957d033c1d77476836407b15f72fb8fa2229ba7aef2ce2b1e2a2b4e0"
+  },
+  {
+    "version": 9,
+    "file": "009_filtering.sql",
+    "sha256": "29d7253ced699903bf8d5a6467a0c07f07d63a834828075d06b5367dad85357e"
   }
 ]

@@ -38,19 +38,21 @@ export function Field({ label, hint, error, children, className }: { label: stri
   );
 }
 
-const inputCls = 'block w-full rounded-md border-0 px-2.5 py-1.5 text-sm text-slate-900 ring-1 ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500';
+const inputBase = 'block rounded-md border-0 px-2.5 py-1.5 text-sm text-slate-900 ring-1 ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500';
+/** Full width unless the caller sets a width (cx does not resolve conflicting Tailwind classes). */
+const inputCls = (extra?: string) => cx(inputBase, /(^|\s)w-/.test(extra ?? '') ? '' : 'w-full', extra);
 
 export function Input(p: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...p} className={cx(inputCls, p.className)} />;
+  return <input {...p} className={inputCls(p.className)} />;
 }
 
 export function Textarea(p: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...p} className={cx(inputCls, 'font-mono', p.className)} />;
+  return <textarea {...p} className={inputCls(cx('font-mono', p.className))} />;
 }
 
 export function Select({ children, ...p }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select {...p} className={cx(inputCls, 'pr-8', p.className)}>
+    <select {...p} className={inputCls(cx('pr-8', p.className))}>
       {children}
     </select>
   );

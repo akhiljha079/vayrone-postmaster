@@ -28,6 +28,7 @@ import {
   updateSettings,
   runMonitorChecks,
   notifyAlerts,
+  purgeQuarantine,
 } from '@vpm/core';
 import { checkForUpdates, trustedKeys, type LicenseManager } from '@vpm/license-client';
 import type { JobHandler } from './jobs.js';
@@ -108,7 +109,11 @@ export function jobHandlers(ctx: CoreContext): Record<string, JobHandler> {
     maintenance: async (p) => {
       switch (p.task) {
         case 'retention':
-          return { archive: await purgeArchive(ctx.db), mailbox: await purgeMailboxFolders(ctx.db, ctx.store) };
+          return {
+            archive: await purgeArchive(ctx.db),
+            mailbox: await purgeMailboxFolders(ctx.db, ctx.store),
+            quarantine: ctx.mailflow.filter ? await purgeQuarantine(ctx.db, (await ctx.mailflow.filter.config()).quarantineDays) : 0,
+          };
         case 'gc':
           return collectGarbage(ctx.db, ctx.blobs);
         case 'housekeeping':

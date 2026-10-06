@@ -51,6 +51,8 @@ export interface CoreConfig {
   ipc: { port: number };
   /** Vayrone License Server (online activation and heartbeat). */
   license?: { serverUrl?: string };
+  /** Optional Redis/Valkey for large sites (events between processes, instant job wake-up). */
+  redis?: { url: string };
   /** Mail protocol connection limits (defaults: 5000 total, 300 per address). */
   limits?: { maxConnections?: number; maxPerIp?: number };
 }

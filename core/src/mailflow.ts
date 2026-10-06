@@ -24,10 +24,12 @@ import type { Settings } from './settings.js';
 import type { ItemOrigin, MailStore, StoredMessage } from './store/mailstore.js';
 import { StoreError } from './store/mailstore.js';
 import { buildDsn } from './dsn.js';
-import { loopCount, prependHeaders, receivedCount, rewriteFromForForward } from './mime/headers.js';
+import { headerValue, loopCount, prependHeaders, receivedCount, rewriteFromForForward } from './mime/headers.js';
 import { RuleMessage, planDelivery, ruleMatches, type Direction, type StoredRule } from './rules/engine.js';
 import { MAIL_POLICY_DEFAULTS, type Condition, type MailPolicy } from './rules/model.js';
 import type { Archiver } from './archive/archive.js';
+import { MailFilter, type Verdict } from './filter/filter.js';
+import { quarantineMessage } from './filter/quarantine.js';
 
 const MAX_RECEIVED_FOR_FORWARD = 30;
 const RULE_CACHE_MS = 10_000;
@@ -50,6 +52,8 @@ export interface InboundRequest {
   ignoreQuota?: boolean;
   /** Journaling is done by the caller (submission handles it once for the whole message). */
   skipJournal?: boolean;
+  /** Already checked (LAN submission) or released from quarantine. */
+  skipFilter?: boolean;
 }
 
 export interface SubmissionRequest {
@@ -89,6 +93,8 @@ export class MailFlow {
   private globalRules: { at: number; rules: StoredRule[] } | null = null;
   /** Compliance archive (set by the context; absent in minimal setups). */
   archiver: Archiver | null = null;
+  /** Spam / antivirus / attachment filter (set by the context). */
+  filter: MailFilter | null = null;
 
   constructor(
     private readonly db: Db,
@@ -357,6 +363,14 @@ export class MailFlow {
     const delivered: number[] = [];
     const seen = new Set<number>();
 
+    // Filtering: once per message, before any rule runs.
+    let verdict: Verdict = { action: 'deliver', spam: null };
+    if (this.filter && !r.skipFilter) {
+      verdict = await this.filter.check(m, { direction: r.direction, envelopeFrom: r.envelopeFrom });
+      if (verdict.action === 'quarantine' || verdict.action === 'reject') return this.hold(r, verdict.kind, verdict.reason);
+    }
+    const fromAddr = (/<([^>]+)>/.exec(headerValue(m.raw, 'from') ?? '')?.[1] ?? headerValue(m.raw, 'from') ?? r.envelopeFrom).trim().toLowerCase();
+
     for (const rcpt of r.recipients) {
       if (seen.has(rcpt.userId)) continue;
       seen.add(rcpt.userId);
@@ -386,11 +400,24 @@ export class MailFlow {
         continue;
       }
 
+      // Spam: Junk unless the user allowed the sender; the user's block list always means Junk.
+      let junk = verdict.action === 'junk';
+      if (this.filter && r.direction === 'in' && !r.skipFilter) {
+        const d = await this.filter.senderDecision(user.id, fromAddr);
+        if (d === 'allow') junk = false;
+        if (d === 'block') junk = true;
+        plan.addHeaders.push(...MailFilter.spamHeaders(verdict.spam ?? null, junk));
+      }
+
       // A redirect means "no local copy" unless a move/copy rule explicitly files it.
       const keepLocal = plan.redirects.length === 0 || plan.folder !== null || plan.copies.length > 0;
       if (keepLocal) {
         const variant = plan.addHeaders.length ? await this.store.ingest(prependHeaders(m.raw, plan.addHeaders)) : undefined;
-        const folderId = plan.folder ? await this.ensureFolder(user.id, plan.folder) : (rcpt.folderId ?? undefined);
+        const folderId = plan.folder
+          ? await this.ensureFolder(user.id, plan.folder)
+          : junk
+            ? ((await this.store.getSpecialFolder(user.id, 'junk'))?.id ?? rcpt.folderId ?? undefined)
+            : (rcpt.folderId ?? undefined);
         const [o] = await this.delivery.deliver({
           message: m,
           targets: [{ userId: user.id, ...(folderId ? { folderId } : {}), flags: plan.flags, ...(variant ? { message: variant } : {}) }],
@@ -442,6 +469,66 @@ export class MailFlow {
     return outcomes;
   }
 
+  /** Holds a message in quarantine for all its (new) recipients and tells them. */
+  private async hold(r: InboundRequest, kind: 'virus' | 'attachment' | 'spam', reason: string): Promise<DeliveryOutcome[]> {
+    const m = r.message;
+    const outcomes: DeliveryOutcome[] = [];
+    const fresh: InboundRecipient[] = [];
+    for (const rc of r.recipients) {
+      if (outcomes.some((o) => o.userId === rc.userId)) continue;
+      // Remember the message, so fetching it again does not hold it twice.
+      const dup = await this.delivery.recordOnly(rc.userId, m);
+      outcomes.push({ userId: rc.userId, status: dup ? 'duplicate' : 'quarantined' });
+      if (!dup) fresh.push(rc);
+    }
+    if (!fresh.length) return outcomes;
+    const id = await quarantineMessage(this.db, { message: m, direction: r.direction, kind, reason, envelopeFrom: r.envelopeFrom, recipients: fresh, origin: r.origin, externalAccountId: r.externalAccountId ?? null });
+    for (const rc of fresh) await this.mailLog('quarantined', m, rc.userId, `${reason} (quarantine #${id})`, r.direction);
+    const cfg = await this.filter!.config();
+    if (cfg.notifyRecipients && kind !== 'spam') {
+      for (const rc of fresh) {
+        const subject = (m.parsed.subject ?? '(no subject)').replace(/[\r\n]+/g, ' ').slice(0, 120);
+        const raw = Buffer.from(
+          [
+            `From: Mail server <postmaster@${this.config.hostname}>`,
+            `Subject: Message held for safety: ${subject}`,
+            `Date: ${new Date().toUTCString()}`,
+            `Message-ID: <held-${id}-${rc.userId}@${this.config.hostname}>`,
+            'Auto-Submitted: auto-generated',
+            'MIME-Version: 1.0',
+            'Content-Type: text/plain; charset=utf-8',
+            '',
+            'A message addressed to you was held by the mail server and not delivered.',
+            '',
+            `From:    ${r.envelopeFrom || '(unknown)'}`,
+            `Subject: ${subject}`,
+            `Reason:  ${reason}`,
+            '',
+            'If you expected this message, ask your mail administrator to release it',
+            `(Admin → Quarantine, entry #${id}). Do not ask the sender to resend it with the same attachment.`,
+            '',
+          ].join('\r\n'),
+        );
+        const notice = await this.store.ingest(raw);
+        await this.delivery.deliver({ message: notice, targets: [{ userId: rc.userId }], origin: 'internal', envelopeFrom: '', dedup: false, ignoreQuota: true });
+      }
+    }
+    return outcomes;
+  }
+
+  /** Delivers a released quarantine entry to its recipients (skipping the filter). */
+  async releaseHeld(row: { message_id: number; direction: 'in' | 'internal' | 'out'; envelope_from: string; origin: string; external_account_id: number | null }, recipients: InboundRecipient[]): Promise<DeliveryOutcome[]> {
+    const message = await this.store.getMessage(row.message_id);
+    if (!message) throw new Error('The held message file is missing');
+    const outcomes: DeliveryOutcome[] = [];
+    for (const rc of recipients) {
+      const [o] = await this.delivery.deliver({ message, targets: [{ userId: rc.userId, ...(rc.folderId ? { folderId: rc.folderId } : {}) }], origin: 'internal', envelopeFrom: row.envelope_from, dedup: false, ignoreQuota: true });
+      outcomes.push(o!);
+    }
+    await this.mailLog('released', message, recipients[0]?.userId ?? null, `released from quarantine to ${recipients.length} recipient(s)`, row.direction === 'out' ? 'out' : row.direction);
+    return outcomes;
+  }
+
   private async notifyRejected(senderUserId: number, envelopeFrom: string, rcpt: string, reason: string, m: StoredMessage): Promise<void> {
     const dsn = buildDsn({ hostname: this.config.hostname, to: envelopeFrom, originalHeaders: m.parsed.headerRaw, failures: [{ rcpt, code: 550, response: `550 5.7.1 ${reason}` }], queueId: 0, arrival: new Date() });
     const notice = await this.store.ingest(dsn);
@@ -454,6 +541,13 @@ export class MailFlow {
 
   async submission(r: SubmissionRequest): Promise<SubmissionResult> {
     const policy = await this.policy();
+    if (this.filter) {
+      const v = await this.filter.check(r.message, { direction: r.external.length ? 'out' : 'internal', envelopeFrom: r.envelopeFrom });
+      if (v.action === 'reject' || v.action === 'quarantine') {
+        await this.mailLog('rejected', r.message, r.senderUserId, v.reason, r.external.length ? 'out' : 'internal');
+        return { rejected: `${v.reason}. The message was not sent.`, outcomes: [], queueId: null };
+      }
+    }
     let outMessage = r.message;
     const bcc: string[] = [];
     if (r.external.length) {
@@ -483,6 +577,7 @@ export class MailFlow {
           senderUserId: r.senderUserId,
           clientIp: r.clientIp ?? null,
           skipJournal: true,
+          skipFilter: true,
         })
       : [];
 

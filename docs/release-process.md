@@ -4,6 +4,8 @@ For Vayrone Infratech engineers who build, sign and publish Vayrone PostMaster. 
 
 ## One-time: signing key
 
+> **Status (2026-10-06):** key `vy-2026-1` has been generated. The private key is on the build Mac at `~/.vayrone/license-signing-vy-2026-1.pem`; its public key is in `license-client/src/keys.ts`. Make the two offline backups (step 2) and remove the key from any machine that does not need it.
+
 1. On an offline or otherwise trusted machine, run:
 
    ```sh

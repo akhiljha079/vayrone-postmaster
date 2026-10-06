@@ -267,6 +267,43 @@ LAN submission: outbound company rules first (reject → SMTP 550 to Outlook,
   - verification of the newest backup on every target;
   - an hourly backup-freshness alert.
 
+## 5.8 Filtering and quarantine (Phase 11)
+
+Code: `core/src/filter/` (migration 009).
+
+- **One check per message, before any recipient gets it.** `MailFilter.check()` runs in `mailflow` for inbound (fetched), internal and outbound (submission) mail. Local delivery of already-checked mail uses `skipFilter`.
+- **Order:**
+  1. **Blocked attachments:** extension list, including RFC 2231 / encoded-word file names and names inside ZIP files.
+  2. **Virus scan:** ClamAV `INSTREAM` over TCP or a Unix socket.
+     - Fails open by default (deliver and raise an alert), or holds the message (`onError: quarantine`).
+     - Needs the `antivirus` licence feature.
+  3. **Spam score:**
+     - built-in rules: provider spam flags, SPF/DMARC failures, display-name spoofing, link-text mismatch, phrases, …;
+     - or Rspamd `/checkv2`.
+  4. **Sender allow/block lists:** global, then per user.
+- **Verdicts:**
+  - `deliver`;
+  - `junk`: the Junk folder plus `X-VPM-Spam*` headers (on Junk copies only);
+  - `quarantine`;
+  - `reject`: outbound only, returned to the sender as an SMTP 550 with the reason.
+- **Quarantine never loses mail.**
+  - The message blob is ref-counted like any mailbox copy.
+  - Delivery rows are recorded as `quarantined`, so fetch dedup does not fetch the message again.
+  - Recipients get a notice.
+  - Release re-runs normal delivery. A **virus** release is super-admin only.
+  - The nightly retention task purges rows after `quarantineDays`.
+- **Learning:** webmail *Junk* / *Not junk* adds the sender to that user's list (`source = webmail`).
+
+## 5.9 Optional Redis / Valkey bus (Phase 11)
+
+- **Default:** core and worker exchange folder-change events and job nudges over loopback IPC.
+- **With `redis.url` in the config:** they use pub/sub instead (`core/src/redisbus.ts`):
+  - **`vpm:events`:** folder changes are batched every 50 ms; a node ignores messages it published itself;
+  - **`vpm:jobs`:** `enqueueJob` notifies the worker, which wakes immediately instead of waiting for its poll.
+- **Purpose:** this lets several core nodes share one worker.
+- **Not required for correctness:** jobs still live in MySQL.
+- **Recommended server:** Valkey (BSD-3). See THIRD_PARTY_LICENSES F6.
+
 ## 6. IMAP / POP3 servers (in-house)
 
 **IMAP:**
@@ -338,7 +375,11 @@ These rules are enforced in code and verified by Phase 2 tests:
   - At most 1000 IDLE sockets is trivial for Node.
   - DB pool: 20 (core) + 20 (worker).
   - Hot paths are a single indexed query each.
-  - A load-test harness is built in Phase 4.
+- **IDLE fan-out:**
+  - The fetcher starts IDLE watchers in batches (25 every 100 ms).
+  - It skips the reconnect catch-up for accounts fetched in the last 60 s.
+  - Accounts whose watcher reports new mail (`EXISTS`) jump an **urgent queue** ahead of routine polls. Without this, 1000 reconnect catch-ups delayed real pushes by more than 30 s.
+- **Load test:** `scripts/loadtest.sh` (`worker/test/load.test.ts`). Results are in [performance.md](performance.md).
 
 ## 9. Security
 

@@ -162,6 +162,7 @@ const ADMIN_NAV: { to: string; label: string; roles?: string[] }[] = [
   { to: '/admin/journal', label: 'Journaling', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/relay', label: 'SMTP relay', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/queue', label: 'Mail queue', roles: ['super_admin', 'admin', 'vayrone_support'] },
+  { to: '/admin/filtering', label: 'Spam & quarantine', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/archive', label: 'Archive' },
   { to: '/admin/backups', label: 'Backups', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/sessions', label: 'Sessions', roles: ['super_admin', 'admin', 'vayrone_support'] },

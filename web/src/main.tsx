@@ -22,6 +22,7 @@ import { LicensePage } from './pages/admin/License';
 import { UpdatesPage } from './pages/admin/Updates';
 import { HealthPage } from './pages/admin/Health';
 import { NetworkPage } from './pages/admin/Network';
+import { FilteringPage } from './pages/admin/Filtering';
 import { Webmail } from './pages/webmail/Webmail';
 import { SetupWizard } from './pages/Setup';
 import { AboutPage } from './pages/About';
@@ -140,6 +141,7 @@ function App() {
           ['/admin/updates', <UpdatesPage />],
           ['/admin/health', <HealthPage />],
           ['/admin/network', <NetworkPage />],
+          ['/admin/filtering', <FilteringPage />],
           ['/admin/sessions', <SessionsPage />],
           ['/admin/security', <SecurityPage />],
           ['/admin/logs', <LogsPage />],

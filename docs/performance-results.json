@@ -1,0 +1,45 @@
+{
+  "users": 500,
+  "externalAccounts": 1000,
+  "messagesPerAccount": 3,
+  "node": "v20.20.2",
+  "cpus": 8,
+  "cpu": "Intel(R) Core(TM) i7-4770HQ CPU @ 2.20GHz",
+  "setupSeconds": 259.4,
+  "rssAfterSetupMB": 120,
+  "initialFetch": {
+    "messages": 3000,
+    "seconds": 28.8,
+    "messagesPerSecond": 104,
+    "accountsPerSecond": 35,
+    "rssMB": 179
+  },
+  "idleWatchers": {
+    "accounts": 1000,
+    "secondsToConnectAll": 9.6,
+    "rssMB": 311
+  },
+  "idlePushLatencyMs": {
+    "samples": 50,
+    "p50": 786,
+    "p95": 800,
+    "max": 801
+  },
+  "clients": {
+    "connected": 500,
+    "secondsToConnect": 4.1,
+    "rssMB": 298
+  },
+  "clientPushLatencyMs": {
+    "samples": 50,
+    "p50": 407,
+    "p95": 409,
+    "max": 411
+  },
+  "smtpSubmission": {
+    "messages": 2000,
+    "seconds": 24.7,
+    "messagesPerSecond": 81,
+    "rssMB": 288
+  }
+}

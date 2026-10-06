@@ -12,6 +12,7 @@
     "croner": "^10.0.1",
     "iconv-lite": "^0.7.3",
     "imapflow": "^2.2.5",
+    "ioredis": "^5.11.1",
     "ipaddr.js": "^2.5.0",
     "libmime": "^5.4.7",
     "mysql2": "^3.24.5",

@@ -339,6 +339,15 @@ export function webmailRoutes(ctx: CoreContext) {
       if (b.action === 'junk') target = (await special('junk')).id;
       if (b.action === 'not_junk') target = (await special('inbox')).id;
       const trash = await special('trash');
+      // Junk / Not junk teach the user's sender lists (future mail from them goes to Junk / Inbox).
+      if ((b.action === 'junk' || b.action === 'not_junk') && ctx.mailflow.filter) {
+        const senders = await dbm.rows<{ hdr_from: string | null }>(
+          ctx.db,
+          'SELECT DISTINCT m.hdr_from FROM mail_items i JOIN messages m ON m.id = i.message_id WHERE i.id IN (?) AND i.user_id = ?',
+          [b.ids, u.id],
+        );
+        for (const s of senders.slice(0, 100)) if (s.hdr_from) await ctx.mailflow.filter.learnSender(u.id, s.hdr_from, b.action === 'junk' ? 'block' : 'allow');
+      }
       for (const [folderId, uids] of groups) {
         switch (b.action) {
           case 'read':

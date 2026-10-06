@@ -13,6 +13,7 @@ import { AuditLog } from './audit.js';
 import { loadSecretBox, type SecretBox } from './secrets.js';
 import { UNLIMITED_LICENSE, type LicenseGate } from './license-gate.js';
 import { MailFlow } from './mailflow.js';
+import { MailFilter } from './filter/filter.js';
 import { Archiver } from './archive/archive.js';
 import { ConnectionLimiter, DEFAULT_LIMITS } from './connlimit.js';
 
@@ -61,6 +62,7 @@ export async function createContext(config: CoreConfig, opts: ContextOptions | L
   const mailflow = new MailFlow(db, store, delivery, directory, settings, config, logger);
   const archiver = new Archiver(db, settings, license);
   mailflow.archiver = archiver;
+  mailflow.filter = new MailFilter(db, settings, license, logger);
   return {
     config,
     db,

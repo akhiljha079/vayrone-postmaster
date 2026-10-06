@@ -9,6 +9,10 @@ import { RELEASE } from './release.js';
 /** Production keys, by key id. Filled in by `node scripts/license-keygen.mjs`. */
 export const VAYRONE_KEYS: KeyRing = {
   // BEGIN VAYRONE KEYS (managed by scripts/license-keygen.mjs)
+  'vy-2026-1': `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAMJ5AxZsX68/ZSPXKJsdBNC+kgg5C5uiHju6XJqBYM0M=
+-----END PUBLIC KEY-----
+`,
   // END VAYRONE KEYS
 };
 

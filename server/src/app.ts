@@ -25,6 +25,7 @@ import { setupRoutes } from './routes/setup.js';
 import { updateRoutes } from './routes/admin/updates.js';
 import { healthRoutes, metricsRoute } from './routes/admin/health.js';
 import { networkRoutes } from './routes/admin/network.js';
+import { filterRoutes } from './routes/admin/filter.js';
 import { attachRealtime } from './realtime.js';
 import { LicenseManager } from '@vpm/license-client';
 
@@ -151,6 +152,7 @@ export async function buildApp(ctx: CoreContext, opts: AppOptions = {}): Promise
   await app.register(updateRoutes(ctx, manager), { prefix: '/api/admin' });
   await app.register(healthRoutes(ctx), { prefix: '/api/admin' });
   await app.register(networkRoutes(ctx), { prefix: '/api/admin' });
+  await app.register(filterRoutes(ctx), { prefix: '/api/admin' });
   await app.register(metricsRoute(ctx));
   await app.register(mailRoutes(ctx), { prefix: '/api/mail' });
   await app.register(webmailRoutes(ctx), { prefix: '/api/mail' });

@@ -15,6 +15,14 @@ export interface EnqueueOptions {
 }
 
 /** Returns the job id, or null when a job with the same dedupe key already exists. */
+const enqueueListeners = new Set<(queue: string) => void>();
+
+/** Notified after a job is queued (the Redis adapter wakes workers with it). */
+export function onJobEnqueued(fn: (queue: string) => void): () => void {
+  enqueueListeners.add(fn);
+  return () => enqueueListeners.delete(fn);
+}
+
 export async function enqueueJob(q: Queryable, o: EnqueueOptions): Promise<number | null> {
   const now = new Date();
   const r = await exec(
@@ -23,6 +31,7 @@ export async function enqueueJob(q: Queryable, o: EnqueueOptions): Promise<numbe
      VALUES (?,?,?,?,'pending',?,?,?,?,?)`,
     [o.queue ?? 'default', o.type, JSON.stringify(o.payload ?? {}), o.dedupeKey ?? null, o.priority ?? 0, o.runAt ?? now, o.maxAttempts ?? 3, now, now],
   );
+  if (r.affectedRows === 1) for (const fn of enqueueListeners) fn(o.queue ?? 'default');
   return r.affectedRows === 1 ? r.insertId : null;
 }
 

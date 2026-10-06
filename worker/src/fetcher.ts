@@ -49,7 +49,8 @@ class IdleWatcher {
   constructor(
     private readonly ctx: CoreContext,
     readonly acc: AccountRow,
-    private readonly onNew: () => void,
+    /** 'exists': the provider announced new mail; 'connect': catch up after (re)connecting. */
+    private readonly onNew: (reason: 'exists' | 'connect') => void,
   ) {}
 
   get key(): string {
@@ -79,10 +80,10 @@ class IdleWatcher {
         }
         const folders = (dbm.json<string[] | null>(this.acc.remote_folders) ?? ['INBOX']).filter(Boolean);
         await client.mailboxOpen(folders[0] ?? 'INBOX', { readOnly: true });
-        client.on('exists', () => this.onNew());
+        client.on('exists', () => this.onNew('exists'));
         await this.setActive(true);
         this.retryMs = 5_000;
-        this.onNew(); // catch up on anything that arrived while disconnected
+        this.onNew('connect'); // catch up on anything that arrived while disconnected
         while (!this.stopped && client.usable) await client.idle();
       } catch (e) {
         const fe = classifyImapError(e);
@@ -116,6 +117,8 @@ export class Fetcher {
   private readonly hostCount = new Map<string, number>();
   private readonly watchers = new Map<number, IdleWatcher>();
   private readonly rerun = new Set<number>();
+  /** Accounts whose provider just announced new mail: fetched before routine work. */
+  private readonly urgent = new Set<number>();
   /** Why an account was kicked, so fetch history shows push-triggered runs. */
   private readonly kickReason = new Map<number, 'idle' | 'manual'>();
   private timer: NodeJS.Timeout | null = null;
@@ -165,12 +168,17 @@ export class Fetcher {
       const free = this.opts.concurrency - this.running.size;
       if (free <= 0) return;
       const now = new Date();
-      const due = await rows<AccountRow>(
+      const urgentIds = [...this.urgent].filter((id) => !this.running.has(id)).slice(0, free * 3);
+      const urgentRows = urgentIds.length
+        ? await rows<AccountRow>(this.ctx.db, "SELECT * FROM external_accounts WHERE id IN (?) AND is_enabled = 1 AND status <> 'auth_failed' AND (next_run_at IS NULL OR next_run_at <= ?)", [urgentIds, now])
+        : [];
+      const routine = await rows<AccountRow>(
         this.ctx.db,
         `SELECT * FROM external_accounts WHERE is_enabled = 1 AND status <> 'auth_failed'
            AND (next_run_at IS NULL OR next_run_at <= ?) ORDER BY next_run_at IS NOT NULL, next_run_at LIMIT ?`,
         [now, free * 3],
       );
+      const due = [...urgentRows, ...routine.filter((r) => !urgentIds.includes(r.id))];
       let started = 0;
       for (const acc of due) {
         if (started >= free) break;
@@ -185,6 +193,7 @@ export class Fetcher {
         );
         if (claimed.affectedRows !== 1) continue;
         started++;
+        this.urgent.delete(acc.id);
         this.hostCount.set(host, (this.hostCount.get(host) ?? 0) + 1);
         const trigger = this.kickReason.get(acc.id) ?? 'schedule';
         this.kickReason.delete(acc.id);
@@ -202,9 +211,10 @@ export class Fetcher {
     }
   }
 
-  /** Requests an immediate fetch (IDLE push, admin "Fetch now"). */
+  /** Requests an immediate fetch (IDLE push, admin "Fetch now"); it goes ahead of routine polling. */
   async kick(accountId: number, reason: 'idle' | 'manual' = 'idle'): Promise<void> {
     this.kickReason.set(accountId, reason);
+    this.urgent.add(accountId);
     if (this.running.has(accountId)) {
       this.rerun.add(accountId);
       return;
@@ -280,6 +290,20 @@ export class Fetcher {
     }
   }
 
+  /** New mail announced → fetch now; a (re)connect only catches up if the last fetch is older than a minute. */
+  private async onWatcherNews(accountId: number, reason: 'exists' | 'connect'): Promise<void> {
+    if (reason === 'connect') {
+      const a = await dbm.one<{ last_success_at: Date | null }>(this.ctx.db, 'SELECT last_success_at FROM external_accounts WHERE id = ?', [accountId]);
+      if (a?.last_success_at && Date.now() - new Date(a.last_success_at).getTime() < 60_000) return;
+    }
+    await this.kick(accountId);
+  }
+
+  /** IMAP accounts whose IDLE connection is up (diagnostics, load tests). */
+  get activeWatchers(): number {
+    return [...this.watchers.values()].filter((w) => w.active).length;
+  }
+
   /** Keeps one IDLE watcher per enabled IMAP account that asks for push. */
   async reconcileWatchers(): Promise<void> {
     try {
@@ -295,11 +319,13 @@ export class Fetcher {
           this.watchers.delete(id);
         }
       }
+      let starting = 0;
       for (const acc of want) {
         if (this.watchers.has(acc.id)) continue;
-        const w = new IdleWatcher(this.ctx, acc, () => void this.kick(acc.id));
+        const w = new IdleWatcher(this.ctx, acc, (reason) => void this.onWatcherNews(acc.id, reason));
         this.watchers.set(acc.id, w);
-        w.start();
+        // Stagger connections (25 per 100 ms): no connection storm towards the providers at start-up.
+        setTimeout(() => w.start(), Math.floor(starting++ / 25) * 100);
       }
     } catch (err) {
       this.ctx.log.error({ err }, 'idle watcher reconcile failed');

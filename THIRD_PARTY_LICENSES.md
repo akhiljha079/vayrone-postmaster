@@ -50,7 +50,7 @@ Policy (spec §11): MIT, MIT-0, BSD-2/3, ISC, Apache-2.0, 0BSD, Zlib, Unlicense 
 | tar-stream | 3.x | MIT | worker | Backup archives |
 | basic-ftp | 6.x | MIT | worker | FTP backup target |
 | @aws-sdk/client-s3 | 3.x | Apache-2.0 | worker | S3 backup target (feature-flagged) |
-| ioredis | 6.x | MIT | worker (optional) | Optional Redis/Valkey adapter |
+| ioredis | 5.x | MIT | core (used only when `redis.url` is set) | Optional Redis/Valkey event and job bus |
 | selfsigned | 5.x | MIT | core | Self-signed TLS certificate on first start |
 | ↳ pkijs, asn1js, bytestreamjs | 3.x | BSD-3-Clause | — | selfsigned dependencies |
 | ↳ @peculiar/x509, pvtsutils, tsyringe | — | MIT | — | selfsigned dependencies |

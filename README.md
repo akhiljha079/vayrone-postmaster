@@ -17,17 +17,19 @@
 | 7 | Archive, search, backup/restore | Delivered |
 | 8 | Licensing + Vayrone License Server | Delivered |
 | 9 | Setup wizard, installers, services, branding | Delivered |
-| 10 | Compilation, signed updater, monitoring, hardening, docs | **Delivered — awaiting review** |
+| 10 | Compilation, signed updater, monitoring, hardening, docs | Delivered |
+| 11 | Spam/virus/attachment filtering and quarantine, optional Redis/Valkey bus, load test, licence tooling | **Delivered — awaiting review** |
 
 ## Documentation
 
 | For | Document |
 |-----|----------|
+| Client go-live (start here) | [docs/deployment-guide.md](docs/deployment-guide.md) |
 | Installing | [docs/install-windows.md](docs/install-windows.md), [docs/install-linux.md](docs/install-linux.md) |
 | Client administrators | [docs/admin-manual.md](docs/admin-manual.md), [docs/upgrade-guide.md](docs/upgrade-guide.md), [docs/security.md](docs/security.md) |
 | Setting up PCs and phones | [docs/mail-clients.md](docs/mail-clients.md) (Outlook, Thunderbird, phones, webmail) |
 | Vayrone technicians | [docs/technician-checklist.md](docs/technician-checklist.md), [installer/README.md](installer/README.md) |
-| Vayrone engineering | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/release-process.md](docs/release-process.md), [license-server/README.md](license-server/README.md) |
+| Vayrone engineering | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/release-process.md](docs/release-process.md), [docs/performance.md](docs/performance.md), [docs/licensing-clients.md](docs/licensing-clients.md), [license-server/README.md](license-server/README.md) |
 
 ## Read first
 

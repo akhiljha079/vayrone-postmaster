@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import { pino } from 'pino';
 import {
   APP_VERSION,
+  attachRedisBus,
   checkInstallSecurity,
   raiseAlert,
   resolveAlert,
@@ -69,11 +70,15 @@ export async function runRole(role: Role): Promise<void> {
       log.warn(`Setup is not finished. Open ${config.web.tls ? 'https' : 'http'}://${config.hostname}:${web.port}/setup?token=${token}`);
     }
   }
-  if (role === 'worker') {
+  // Events between processes: Redis/Valkey when configured (large sites), loopback IPC otherwise.
+  const bus = config.redis?.url ? await attachRedisBus(ctx.events, config.redis.url, log) : null;
+  if (bus) stops.push(() => bus.close());
+  if (role === 'worker' && !bus) {
     if (config.ipc.port > 0) attachIpcPublisher(ctx.events, config.ipc.port, await ipcToken(config.dataPath), ctx.log);
   }
   if (role === 'worker' || role === 'all') {
     const w = await startWorker(ctx, license);
+    bus?.onJob(() => w.nudge());
     stops.push(() => w.stop());
   }
 

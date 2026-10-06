@@ -14,6 +14,8 @@
 #   --data DIR        mail data folder (default /var/lib/vayrone-postmaster)
 #   --web-port N      HTTPS port of the web admin (default 443, or 8443 if busy)
 #   --no-firewall     do not change firewall rules
+#   --with-clamav     also install the ClamAV virus scanner (distribution package)
+#   --with-rspamd     also install the Rspamd spam filter (Ubuntu/Debian package)
 set -eu
 
 DOWNLOAD=${VPM_DOWNLOAD:-https://download.vayrone.com/postmaster}
@@ -22,6 +24,8 @@ PACKAGE=""
 DATA=""
 WEBPORT=""
 FIREWALL=1
+CLAMAV=0
+RSPAMD=0
 PORTS="443 8443 587 465 143 993 110 995"
 
 say() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -34,6 +38,8 @@ while [ $# -gt 0 ]; do
     --data) DATA=$2; shift 2 ;;
     --web-port) WEBPORT=$2; shift 2 ;;
     --no-firewall) FIREWALL=0; shift ;;
+    --with-clamav) CLAMAV=1; shift ;;
+    --with-rspamd) RSPAMD=1; shift ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) die "unknown option $1" ;;
   esac
@@ -82,6 +88,33 @@ until [ -S /run/mysqld/mysqld.sock ] || [ -S /var/lib/mysql/mysql.sock ] || [ -S
   sleep 1
 done
 
+# ---------------------------------------------------------------- optional filters
+# Separate programs from the distribution (GPL), used over their sockets; not bundled.
+if [ "$CLAMAV" = 1 ]; then
+  say "Installing ClamAV"
+  if [ "$FAMILY" = deb ]; then
+    apt-get install -y -qq clamav-daemon clamav-freshclam
+    systemctl enable --now clamav-freshclam clamav-daemon >/dev/null 2>&1 || true
+    CLAMD_SOCKET=/var/run/clamav/clamd.ctl
+  else
+    dnf install -y -q epel-release >/dev/null 2>&1 || true
+    dnf install -y -q clamd clamav-update
+    sed -i 's/^#\?LocalSocket .*/LocalSocket \/run\/clamd.scan\/clamd.sock/' /etc/clamd.d/scan.conf
+    freshclam >/dev/null 2>&1 || true
+    systemctl enable --now clamd@scan >/dev/null 2>&1 || true
+    CLAMD_SOCKET=/run/clamd.scan/clamd.sock
+  fi
+fi
+if [ "$RSPAMD" = 1 ]; then
+  if [ "$FAMILY" = deb ]; then
+    say "Installing Rspamd"
+    apt-get install -y -qq rspamd redis-server
+    systemctl enable --now rspamd >/dev/null 2>&1 || true
+  else
+    say "Rspamd: install it from https://rspamd.com/downloads.html (RHEL family), then choose it in Admin → Spam & quarantine"
+  fi
+fi
+
 # ---------------------------------------------------------------- package
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -116,6 +149,15 @@ if [ "$FIREWALL" = 1 ]; then
     for p in $PORTS; do firewall-cmd --permanent --add-port="$p/tcp" >/dev/null; done
     firewall-cmd --reload >/dev/null
   fi
+fi
+
+if [ "$CLAMAV" = 1 ]; then
+  # Let the service account use the ClamAV socket.
+  usermod -a -G clamav vpm >/dev/null 2>&1 || usermod -a -G virusgroup vpm >/dev/null 2>&1 || true
+  say "ClamAV: in Admin → Spam & quarantine choose ClamAV with socket $CLAMD_SOCKET (or TCP 127.0.0.1:3310)"
+fi
+if [ "$RSPAMD" = 1 ] && [ "$FAMILY" = deb ]; then
+  say "Rspamd: in Admin → Spam & quarantine choose Rspamd (http://127.0.0.1:11333)"
 fi
 
 if systemctl is-active --quiet vayrone-postmaster.service; then
