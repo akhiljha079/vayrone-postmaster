@@ -1,0 +1,12 @@
+Vayrone PostMaster 0.5.0
+
+New
+- Spam, virus and attachment protection: Admin > Spam & quarantine.
+  Suspicious mail goes to Junk; viruses and dangerous attachments (.exe, .js, ... also inside ZIP files)
+  are held in quarantine, where an administrator can release or delete them. Nothing is lost.
+- Optional ClamAV virus scanner (Linux: install.sh --with-clamav).
+- Webmail Junk / Not junk now teaches the server which senders you trust.
+
+Improved
+- New provider mail reaches Outlook faster when many mailboxes are connected.
+- Admin panel: search boxes and filters keep their size.

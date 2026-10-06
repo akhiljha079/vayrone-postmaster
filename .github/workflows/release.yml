@@ -1,0 +1,117 @@
+# Release build: the executable embeds V8 bytecode, which must be compiled on
+# each target platform. Runs on tags (v0.4.0) or by hand.
+#
+# Repository secrets:
+#   VPM_SIGNING_KEY        Ed25519 private key (PEM) — signs integrity manifests and update packages
+#   VPM_SIGNING_KID        its key id (e.g. vy-2026-1)
+#   WIN_CERT_PFX_BASE64    Authenticode certificate (base64 .pfx)   } optional: Windows code signing
+#   WIN_CERT_PASSWORD      its password                             }
+name: release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: stable or beta
+        default: beta
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: sudo apt-get install -y mariadb-server && sudo systemctl start mariadb
+      - run: npm ci
+      - run: npm run license-audit
+      - run: npm run typecheck --workspaces --if-present
+      - run: npm test --workspaces --if-present
+        env:
+          VPM_TEST_DB_SOCKET: /run/mysqld/mysqld.sock
+          VPM_TEST_DB_USER: root
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-22.04, target: linux-x64 }
+          - { os: ubuntu-22.04-arm, target: linux-arm64 }
+          - { os: windows-2022, target: win-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - name: Signing key
+        shell: bash
+        run: |
+          printf '%s' "${{ secrets.VPM_SIGNING_KEY }}" > "$RUNNER_TEMP/signing.pem"
+          chmod 600 "$RUNNER_TEMP/signing.pem"
+      - name: Windows code signing command
+        if: runner.os == 'Windows' && env.HAS_CERT == 'true'
+        shell: bash
+        env: { HAS_CERT: "${{ secrets.WIN_CERT_PFX_BASE64 != '' }}" }
+        run: |
+          echo "${{ secrets.WIN_CERT_PFX_BASE64 }}" | base64 -d > "$RUNNER_TEMP/cert.pfx"
+          echo "VPM_SIGN_CMD=signtool sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 /f $RUNNER_TEMP/cert.pfx /p ${{ secrets.WIN_CERT_PASSWORD }}" >> "$GITHUB_ENV"
+      - name: Build executable (V8 bytecode, obfuscated licensing, signed integrity manifest)
+        shell: bash
+        run: node scripts/build-release.mjs --target ${{ matrix.target }} --format sea --release --sign-key "$RUNNER_TEMP/signing.pem" --kid "${{ secrets.VPM_SIGNING_KID }}"
+      - name: Update package
+        shell: bash
+        run: |
+          VERSION=$(cat release/${{ matrix.target }}/VERSION)
+          NOTES=""; [ -f "release-notes/$VERSION.txt" ] && NOTES="--notes release-notes/$VERSION.txt"
+          npx tsx scripts/make-update.ts release/${{ matrix.target }} --key "$RUNNER_TEMP/signing.pem" --kid "${{ secrets.VPM_SIGNING_KID }}" --channel "${{ github.event.inputs.channel || 'stable' }}" --out dist/updates/${{ github.event.inputs.channel || 'stable' }}/${{ matrix.target }} $NOTES
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL -o nfpm.tgz https://github.com/goreleaser/nfpm/releases/download/v2.47.0/nfpm_2.47.0_Linux_$( [ "${{ matrix.target }}" = linux-arm64 ] && echo arm64 || echo x86_64 ).tar.gz
+          tar xzf nfpm.tgz nfpm && sudo mv nfpm /usr/local/bin/
+          SKIP_BUILD=1 ARCH=${{ matrix.target == 'linux-arm64' && 'arm64' || 'x64' }} sh scripts/package-linux.sh
+      - name: Windows installer
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          choco install innosetup -y --no-progress
+          node scripts/package-windows.mjs --skip-build
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/signing.pem" "$RUNNER_TEMP/cert.pfx"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vayrone-postmaster-${{ matrix.target }}
+          path: dist/
+
+  # On a version tag: a GitHub Release (private, like the repository) with the
+  # Windows installer, Linux packages, update packages and SHA256SUMS.
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Collect files
+        run: |
+          mkdir -p out
+          find artifacts -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.vpmupdate' \) -exec cp {} out/ \;
+          # Each target has its own latest.vidx: name it after the target (artifacts/vayrone-postmaster-<target>/updates/<channel>/<target>/latest.vidx).
+          find artifacts -type f -name 'latest.vidx' | while read -r f; do cp "$f" "out/latest-$(basename "$(dirname "$f")").vidx"; done
+          (cd out && sha256sum * > SHA256SUMS)
+          ls -l out
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          [ -f "$GITHUB_WORKSPACE/release-notes/${TAG#v}.txt" ] && NOTES="--notes-file release-notes/${TAG#v}.txt" || NOTES="--generate-notes"
+          gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --title "Vayrone PostMaster ${TAG#v}" $NOTES
