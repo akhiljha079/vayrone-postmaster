@@ -121,4 +121,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           [ -f "$GITHUB_WORKSPACE/release-notes/${TAG#v}.txt" ] && NOTES="--notes-file release-notes/${TAG#v}.txt" || NOTES="--generate-notes"
-          gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --title "Vayrone PostMaster ${TAG#v}" $NOTES
+          # Re-running a tag updates its release instead of failing.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --title "Vayrone PostMaster ${TAG#v}" $NOTES
+          fi

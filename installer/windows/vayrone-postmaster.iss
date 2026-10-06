@@ -263,14 +263,14 @@ end;
 
 procedure FirstInstall();
 var
-  App, Data, Vpm, Pw, Tmp, MyIni, Log: String;
+  App, Data, Vpm, Pw, Tmp, MyIni, LogFile: String;
   Code: Integer;
 begin
   App := ExpandConstant('{app}');
   Data := DataDir();
   Vpm := App + '\bin\vpm.exe';
   Tmp := ExpandConstant('{tmp}\secret.txt');
-  Log := ConfigDir() + '\install.log';
+  LogFile := ConfigDir() + '\install.log';
   ForceDirectories(Data);
   ForceDirectories(Data + '\logs');
   // Only administrators and the services (LocalSystem) may read mail and configuration.
@@ -300,9 +300,9 @@ begin
   if not RunHidden(ExpandConstant('{cmd}'),
       '/c "set "VPM_DB_ADMIN_PASSWORD=' + Pw + '" && "' + Vpm + '" init --home "' + App + '" --config "' + ConfigFile() + '" --data "' + Data +
       '" --dpapi --master-key "' + ConfigDir() + '\master.key.dpapi" --db-host 127.0.0.1 --db-port {#DbPort} --db-admin-user root --web-port ' + WebPort() +
-      ' --hostname ' + GetComputerNameString() + ' > "' + Log + '" 2>&1"', 'vpm init') then
-    RaiseException('Setting up the mail database failed. See ' + Log);
-  SetupUrlValue := ReadLine(Log, 'Open the setup wizard: ');
+      ' --hostname ' + GetComputerNameString() + ' > "' + LogFile + '" 2>&1"', 'vpm init') then
+    RaiseException('Setting up the mail database failed. See ' + LogFile);
+  SetupUrlValue := ReadLine(LogFile, 'Open the setup wizard: ');
   // The setup wizard is opened locally, where no token is needed.
   if SetupUrlValue <> '' then SetupUrlValue := AdminUrl('') + 'setup';
 
