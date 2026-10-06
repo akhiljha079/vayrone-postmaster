@@ -66,7 +66,9 @@ if (!existsSync(join(mdir, 'bin', 'mariadb-install-db.exe'))) {
   const tmp = join(cache, 'mariadb-x');
   rmSync(tmp, { recursive: true, force: true });
   mkdirSync(tmp);
-  execFileSync('unzip', ['-q', zip, '-d', tmp]);
+  // Windows: the system bsdtar (Git-Bash's GNU tar and unzip are not reliable with drive-letter paths).
+  if (process.platform === 'win32') execFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', zip, '-C', tmp]);
+  else execFileSync('unzip', ['-q', zip, '-d', tmp]);
   const top = join(tmp, readdirSync(tmp)[0]);
   rmSync(mdir, { recursive: true, force: true });
   mkdirSync(mdir);
@@ -94,6 +96,7 @@ if (!existsSync(join(mdir, 'bin', 'mariadb-install-db.exe'))) {
 if (args.includes('--no-iscc') || process.platform !== 'win32') {
   log(`Inputs ready. On Windows run: ISCC /DAppVersion=${version} installer\\windows\\vayrone-postmaster.iss`);
 } else {
-  const iscc = ['ISCC.exe', 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe'].find((p) => p === 'ISCC.exe' || existsSync(p));
+  const installed = 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe';
+  const iscc = existsSync(installed) ? installed : 'ISCC.exe';
   execFileSync(iscc, [`/DAppVersion=${version}`, join(root, 'installer/windows/vayrone-postmaster.iss')], { stdio: 'inherit' });
 }

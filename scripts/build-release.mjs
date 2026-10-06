@@ -72,7 +72,9 @@ function nodeRuntime() {
   if (createHash('sha256').update(readFileSync(archive)).digest('hex') !== sha) throw new Error(`Checksum mismatch for ${file}`);
   const dir = join(cache, file.replace(/\.(zip|tar\.xz)$/, ''));
   if (!existsSync(dir)) {
-    if (ext === 'zip') execFileSync(os === 'win' && process.platform === 'win32' ? 'tar' : 'unzip', os === 'win' && process.platform === 'win32' ? ['-xf', archive, '-C', cache] : ['-q', archive, '-d', cache]);
+    // On Windows use the system bsdtar by full path: Git-Bash puts GNU tar first on PATH, which reads "D:\…" as host:path.
+    const winTar = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe');
+    if (ext === 'zip') execFileSync(process.platform === 'win32' ? winTar : 'unzip', process.platform === 'win32' ? ['-xf', archive, '-C', cache] : ['-q', archive, '-d', cache]);
     else execFileSync('tar', ['-xJf', archive, '-C', cache]);
   }
   return { bin: os === 'win' ? join(dir, 'node.exe') : join(dir, 'bin/node'), license: join(dir, 'LICENSE'), file };

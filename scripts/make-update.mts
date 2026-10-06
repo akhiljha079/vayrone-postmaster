@@ -1,6 +1,6 @@
 // Signs a release folder as an update package and writes the channel index.
 //
-//   npx tsx scripts/make-update.ts <release-dir> --key <private.pem> --kid <id>
+//   npx tsx scripts/make-update.mts <release-dir> --key <private.pem> --kid <id>
 //        [--channel stable|beta] [--min-version 0.3.0] [--notes notes.txt] [--out dist/updates]
 //
 // Upload the output to the update server:
@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 const dir = args[0];
 const opt = (k: string, d?: string) => (args.includes(`--${k}`) ? args[args.indexOf(`--${k}`) + 1] : d);
 if (!dir || !opt('key') || !opt('kid')) {
-  console.error('Usage: npx tsx scripts/make-update.ts <release-dir> --key <private.pem> --kid <id> [--channel stable|beta] [--min-version x] [--notes file] [--out dir]');
+  console.error('Usage: npx tsx scripts/make-update.mts <release-dir> --key <private.pem> --kid <id> [--channel stable|beta] [--min-version x] [--notes file] [--out dir]');
   process.exit(1);
 }
 const release = JSON.parse(readFileSync(join(dir, 'release.json'), 'utf8')) as { version: string; target: string; format: 'sea' | 'node'; release: boolean };

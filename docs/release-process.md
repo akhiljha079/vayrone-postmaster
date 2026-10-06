@@ -53,7 +53,7 @@ The executable contains V8 bytecode compiled by the target platform's Node.js. *
       - injects the bytecode into the official Node.js 24 binary (checksum-verified);
       - checks that no source, source maps or private keys are included;
       - signs `integrity.vsig`;
-   3. runs `npx tsx scripts/make-update.ts …`, which writes the signed `.vpmupdate` and `latest.vidx`;
+   3. runs `npx tsx scripts/make-update.mts …`, which writes the signed `.vpmupdate` and `latest.vidx`;
    4. on Linux: builds `.deb` and `.rpm` (nfpm), `install.sh` and `SHA256SUMS`;
    5. on Windows: downloads WinSW and MariaDB 11.4 (checksum-verified) and builds `VayronePostMaster-Setup-<version>.exe` (Inno Setup).
 4. **Test the artifacts** on the test servers (Windows Server 2022, Ubuntu 24.04, AlmaLinux 9):
@@ -69,7 +69,7 @@ The executable contains V8 bytecode compiled by the target platform's Node.js. *
 | Windows installer | the same folder |
 | `dist/updates/<channel>/<target>/` | `https://updates.vayrone.com/postmaster/<channel>/<target>/` |
 
-- **Order:** publish to `beta` first. Promote to `stable` after at least a week without problems, by re-running `make-update.ts --channel stable` on the same release folder.
+- **Order:** publish to `beta` first. Promote to `stable` after at least a week without problems, by re-running `make-update.mts --channel stable` on the same release folder.
 - **Partners:** tell them about the release, and give offline sites the `.vpmupdate` file.
 
 ## What must never ship

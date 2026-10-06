@@ -38,6 +38,7 @@ jobs:
   build:
     needs: test
     strategy:
+      fail-fast: false   # a failing Linux build must not cancel the Windows installer
       matrix:
         include:
           - { os: ubuntu-22.04, target: linux-x64 }
@@ -69,7 +70,7 @@ jobs:
         run: |
           VERSION=$(cat release/${{ matrix.target }}/VERSION)
           NOTES=""; [ -f "release-notes/$VERSION.txt" ] && NOTES="--notes release-notes/$VERSION.txt"
-          npx tsx scripts/make-update.ts release/${{ matrix.target }} --key "$RUNNER_TEMP/signing.pem" --kid "${{ secrets.VPM_SIGNING_KID }}" --channel "${{ github.event.inputs.channel || 'stable' }}" --out dist/updates/${{ github.event.inputs.channel || 'stable' }}/${{ matrix.target }} $NOTES
+          npx tsx scripts/make-update.mts release/${{ matrix.target }} --key "$RUNNER_TEMP/signing.pem" --kid "${{ secrets.VPM_SIGNING_KID }}" --channel "${{ github.event.inputs.channel || 'stable' }}" --out dist/updates/${{ github.event.inputs.channel || 'stable' }}/${{ matrix.target }} $NOTES
       - name: Linux packages
         if: runner.os == 'Linux'
         run: |
@@ -95,7 +96,8 @@ jobs:
   # Windows installer, Linux packages, update packages and SHA256SUMS.
   publish:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Publish whatever was built, so one failed platform does not hold back the others.
+    if: always() && needs.build.result != 'cancelled' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -103,12 +105,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { path: artifacts }
+        continue-on-error: true
       - name: Collect files
         run: |
           mkdir -p out
           find artifacts -type f \( -name '*.exe' -o -name '*.deb' -o -name '*.rpm' -o -name '*.vpmupdate' \) -exec cp {} out/ \;
           # Each target has its own latest.vidx: name it after the target (artifacts/vayrone-postmaster-<target>/updates/<channel>/<target>/latest.vidx).
           find artifacts -type f -name 'latest.vidx' | while read -r f; do cp "$f" "out/latest-$(basename "$(dirname "$f")").vidx"; done
+          [ -n "$(ls out)" ] || { echo "Nothing was built"; exit 1; }
           (cd out && sha256sum * > SHA256SUMS)
           ls -l out
       - name: Create release

@@ -92,7 +92,7 @@ async function listFiles(dir: string): Promise<string[]> {
   return out;
 }
 
-/** Packs a release folder. `sign` signs the manifest (scripts/make-update.ts). */
+/** Packs a release folder. `sign` signs the manifest (scripts/make-update.mts). */
 export async function writeUpdatePackage(
   releaseDir: string,
   outFile: string,

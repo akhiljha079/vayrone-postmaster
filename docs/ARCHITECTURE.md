@@ -542,7 +542,7 @@ These rules are enforced in code and verified by Phase 2 tests:
 - **Package format `.vpmupdate`:**
   - layout: `VPMUPDATE/1` header, then a signed manifest (`vpm-update/1`: version, target, packageFormat, releasedAt, minVersion, notes, and each file's path, size, SHA-256 and offset), then the gzip-compressed files;
   - channel index: `latest.vidx` (`vpm-update-index/1`) per channel (stable/beta) and target;
-  - built by `scripts/make-update.ts`; verified by `@vpm/license-client/update` (signature, then every file hash, then path safety).
+  - built by `scripts/make-update.mts`; verified by `@vpm/license-client/update` (signature, then every file hash, then path safety).
 - **Flow:**
   1. **Check:** the worker checks the channel daily; Admin → Updates also has *Check now*.
   2. **Get the package:** download (SHA-256 against the index), or upload an offline file. Either way the package is fully verified and staged in `<data>/updates/download`.
