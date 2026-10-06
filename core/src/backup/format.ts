@@ -17,6 +17,8 @@ export function encodeCell(v: unknown, type: string): Cell {
   if (Buffer.isBuffer(v)) return { $b: v.toString('base64') };
   if (v instanceof Date) return { $d: v.toISOString() };
   if (type === 'json') return typeof v === 'string' ? v : JSON.stringify(v);
+  // MariaDB reports JSON columns as longtext, yet the driver may still hand back the parsed value.
+  if (typeof v === 'object') return JSON.stringify(v);
   if (typeof v === 'bigint') return v.toString();
   return v as Cell;
 }

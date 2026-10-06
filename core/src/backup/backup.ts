@@ -118,7 +118,7 @@ export async function runBackup(o: BackupOptions): Promise<BackupResult> {
         'SELECT COLUMN_NAME AS c, DATA_TYPE AS t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION',
         [table],
       );
-      // MySQL returns JSON columns as objects (re-serialised here); MariaDB stores JSON as text, which round-trips as-is.
+      // JSON columns go into the dump as JSON text (encodeCell), whether MySQL or MariaDB returned them parsed.
       const types = cols.map((c) => c.t);
       const pk = (await q<{ c: string }>(
         "SELECT COLUMN_NAME AS c FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = 'PRIMARY' ORDER BY ORDINAL_POSITION",

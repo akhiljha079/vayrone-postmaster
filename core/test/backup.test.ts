@@ -9,6 +9,7 @@ import mysql from 'mysql2/promise';
 import { exec, one } from '../src/db.js';
 import { restoreFull, restorePartial } from '../src/backup/restore.js';
 import { readManifest, runBackup, verifyBackup } from '../src/backup/backup.js';
+import { decodeCell, encodeCell } from '../src/backup/format.js';
 import { RawClient, dbConfig, makeUser, startCore, uniqueDomain, type TestCore } from './helpers.js';
 import { simpleMessage } from './fixtures.js';
 
@@ -42,6 +43,19 @@ async function snapshot(core: TestCore, email: string, boxes: string[]): Promise
   await p.pop('QUIT');
   return snap;
 }
+
+describe('dump cell encoding', () => {
+  it('stores JSON values as JSON text, also when MariaDB reports the column as longtext', () => {
+    for (const type of ['json', 'longtext']) {
+      expect(encodeCell(['a@x.test', 'b@x.test'], type)).toBe('["a@x.test","b@x.test"]');
+      expect(encodeCell({ k: 1 }, type)).toBe('{"k":1}');
+    }
+    expect(encodeCell('["kept"]', 'longtext')).toBe('["kept"]');
+    const d = new Date('2026-10-06T10:00:00Z');
+    expect(decodeCell(encodeCell(d, 'datetime') as never)).toEqual(d);
+    expect(decodeCell(encodeCell(Buffer.from('hi'), 'blob') as never)).toEqual(Buffer.from('hi'));
+  });
+});
 
 describe.skipIf(!dbConfig())('backup and restore keep mailbox identities exactly', () => {
   let core: TestCore;
