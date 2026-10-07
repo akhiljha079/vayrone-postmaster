@@ -120,10 +120,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          [ -f "$GITHUB_WORKSPACE/release-notes/${TAG#v}.txt" ] && NOTES="--notes-file release-notes/${TAG#v}.txt" || NOTES="--generate-notes"
+          V=${TAG#v}
+          # The installer link goes first: GitHub hides most assets behind "Show all assets".
+          {
+            echo "## Download"
+            echo
+            echo "**Windows installer:** [VayronePostMaster-Setup-$V.exe](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/VayronePostMaster-Setup-$V.exe)"
+            echo
+            echo 'Linux: `.deb` / `.rpm` packages below (click **Show all assets**).'
+            echo
+            echo "---"
+            echo
+            [ -f "release-notes/$V.txt" ] && cat "release-notes/$V.txt"
+          } > notes.md
           # Re-running a tag updates its release instead of failing.
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" out/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
           else
-            gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --title "Vayrone PostMaster ${TAG#v}" $NOTES
+            gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --title "Vayrone PostMaster $V" --notes-file notes.md
           fi
