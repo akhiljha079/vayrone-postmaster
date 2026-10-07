@@ -39,7 +39,7 @@ const USAGE = `Usage: vpm cli <command>
   license                                  Show the licence status
   license:activate <key>                   Activate online with a licence key
   license:request [key] [file]             Write an offline activation / re-validation request file
-  license:import <file>                    Import a licence file from the Vayrone portal
+  license:import <file>                    Import a licence file (.vlic) received from Vayrone
   hwid [--write <file>]                    Show the machine ID; --write saves root-only hardware IDs (service pre-start)`;
 
 /** --name value / --flag pairs. */
@@ -182,7 +182,7 @@ export async function runCli(argv: string[], d: CliDefaults = {}): Promise<void>
         const out = key ? a[1] : a[0];
         const r = await license.offlineRequest(key);
         writeFileSync(out ?? r.fileName, r.text);
-        console.log(`Request written to ${out ?? r.fileName}. Upload it to the Vayrone portal and import the licence file you receive.`);
+        console.log(`Request written to ${out ?? r.fileName}. Send it to Vayrone Infratech or your partner, then import the licence file you receive.`);
         break;
       }
       case 'license:import': {

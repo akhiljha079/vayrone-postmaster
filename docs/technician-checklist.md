@@ -4,7 +4,7 @@ For Vayrone Infratech and partner technicians. Tick every line; leave a copy wit
 
 ## Before the visit
 
-- [ ] **Licence:** licence key issued on the License Server for the right client, plan and user count. For an offline site, the portal address is noted.
+- [ ] **Licence:** licence key issued on the License Server for the right client, plan and user count. For an offline site, the client knows to send the request file to Vayrone (e-mail or WhatsApp) and import the .vlic file they get back.
 - [ ] **Installer:** latest installer or package plus `SHA256SUMS` on a USB stick. Checksum verified.
 - [ ] **Provider details from the client:**
   - [ ] mail domain(s);

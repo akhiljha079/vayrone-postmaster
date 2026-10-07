@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError, formatBytes } from '../api';
 import { Badge, Button, Card, ErrorBanner, Field, Input, Select, Spinner, Textarea, Toggle, generatePassword, useAction } from '../components/ui';
+import { LicenseDetails, type LicenseDetailsData } from '../components/LicenseDetails';
 
 const TOKEN_KEY = 'vpm_setup_token';
 
@@ -30,7 +31,7 @@ interface LicenseInfo {
   status: string;
   mode: string;
   reason: string;
-  license: { licenseId: string; client: { name: string }; plan: { name: string }; maxUsers: number; expiresAt: string | null } | null;
+  license: LicenseDetailsData | null;
   machine: { id: string };
 }
 
@@ -251,8 +252,11 @@ function LicenseStep({ s, onDone }: { s: SetupState; onDone: () => void }) {
   return (
     <Card title="1. Licence">
       {l?.license ? (
-        <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-200">
-          Licensed to <b>{l.license.client.name}</b> — {l.license.plan.name}, {l.license.maxUsers} users ({l.license.licenseId}).
+        <div className="mb-4 space-y-2">
+          <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 ring-1 ring-emerald-200">Licence active. Check the details below, then continue.</div>
+          <div className="rounded-md px-3 ring-1 ring-slate-200">
+            <LicenseDetails l={l.license} />
+          </div>
         </div>
       ) : (
         <p className="mb-4 text-sm text-slate-600">Enter the licence key from Vayrone Infratech or your partner. Servers without internet access use offline activation.</p>
@@ -279,7 +283,7 @@ function LicenseStep({ s, onDone }: { s: SetupState; onDone: () => void }) {
             <Button variant="secondary" busy={request.busy} disabled={key.trim().length < 20} onClick={() => void request.run()}>
               Download request file
             </Button>
-            <p className="mt-1 text-slate-500">Upload it on the Vayrone licence portal from any computer with internet (or send it to your partner), then import the licence file you receive.</p>
+            <p className="mt-1 text-slate-500">Send it to Vayrone Infratech or your partner (e-mail or WhatsApp is fine). Import the licence file (.vlic) you receive back below. No login or website is needed.</p>
           </div>
           <input type="file" accept=".vlic,.txt" className="block text-sm" onChange={async (e) => e.target.files?.[0] && setText(await readFile(e.target.files[0], 'text'))} />
           <Textarea rows={4} className="font-mono text-xs" placeholder="…or paste the licence file" value={text} onChange={(e) => setText(e.target.value)} />

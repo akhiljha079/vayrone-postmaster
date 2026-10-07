@@ -572,7 +572,7 @@ export class LicenseManager implements LicenseGate {
   /** Imports a licence file (offline activation/renewal) or a revocation notice. */
   async importFile(text: string): Promise<Evaluation> {
     if (text.includes('REVOCATION-----')) throw new LicenseActionError('WRONG_TYPE', 'This is a revocation notice, not a licence file');
-    if (text.includes('ACTIVATION REQUEST-----')) throw new LicenseActionError('WRONG_TYPE', 'This is the request file. Upload it to the Vayrone portal, then import the licence file you receive.');
+    if (text.includes('ACTIVATION REQUEST-----')) throw new LicenseActionError('WRONG_TYPE', 'This is the request file. Send it to Vayrone Infratech or your partner, then import the licence file you receive.');
     const { license: current, secret } = await this.current();
     const lic = await this.acceptLicense(text, current);
     const keep = secret.activationId === lic.activation.id ? secret : { key: secret.key, token: null, activationId: lic.activation.id };

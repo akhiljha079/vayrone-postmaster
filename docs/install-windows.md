@@ -45,7 +45,7 @@ The browser warns about the certificate the first time. This is expected; a self
 
 | Step | What to enter |
 |------|---------------|
-| 1. Licence | The licence key; the server must reach the internet for a moment. Without internet, choose *Offline activation*, download the request file, upload it at `https://license.vayrone.com/portal` from any PC, and import the licence file you get back. |
+| 1. Licence | The licence key; the server must reach the internet for a moment. Without internet, choose *Offline activation*, download the request file, send it to Vayrone or your partner (e-mail or WhatsApp), and import the licence file you get back. |
 | 2. Company | Name, address, GSTIN, contact, logo. Shown on the login page; sent to Vayrone with the activation. |
 | 3. Mail domains | For example `company.com`. |
 | 4. Super admin | The first administrator. Keep the password safe. |

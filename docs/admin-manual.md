@@ -160,15 +160,18 @@ When the archive is enabled, every incoming and outgoing message is kept for the
 
 ## 11. Licence
 
-**Admin → Licence** shows:
+**Admin → Licence** shows everything in your licence, read straight from the key or licence file. There is no separate Vayrone website or login to check:
 
-- the plan and the licensed vs. used users;
-- the expiry and AMC dates;
-- the machine ID.
+- **Who it's for:** licensed to (company and city), contact person, e-mail, phone and GSTIN;
+- **What you bought:** plan, licensed users (and how many are in use), included features, partner;
+- **Dates:** licence number, issue date, valid until, AMC (updates and support) until, next validation;
+- **This server:** the machine ID.
+
+Right after you enter a key or import a licence file, a green line confirms what was applied, for example *"Agra Steel Traders — Business, 50 users, valid until 6 Oct 2027"*.
 
 | Situation | What to do |
 |-----------|------------|
-| Renewal or upgrade bought | Online: *Check now* (or wait a day). Offline: create a request file, upload it to the Vayrone portal, import the licence file. |
+| Renewal or upgrade bought | Online: *Check now* (or wait a day). Offline: create a request file, send it to Vayrone or your partner, import the licence file you get back. |
 | Server without internet | Re-validate at least every 90 days the same way (a banner reminds you). |
 | Moving to new hardware | *Move licence to another server* on the old server, then activate the key on the new one. |
 | Licence expired | 15 days of grace with a banner. After that, the admin panel is read-only and new webmail sign-ins are blocked. **Mail keeps flowing in every case.** |

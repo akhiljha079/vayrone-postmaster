@@ -1,0 +1,10 @@
+Vayrone PostMaster 0.6.1
+
+Improved
+- Admin > Licence shows everything in your licence, read from the key or licence file itself:
+  licensed to, contact person, e-mail, phone, GSTIN, plan, licensed users, included features,
+  licence number, issue date, valid until and AMC. No Vayrone website or login is needed.
+- After entering a key or importing a licence file, a confirmation shows what was applied.
+- The setup wizard shows the full licence details before you continue.
+- Servers without internet: send the request file to Vayrone or your partner (e-mail or WhatsApp)
+  and import the licence file you get back.

@@ -74,7 +74,7 @@ See [performance.md](performance.md).
 
 At the end, the browser opens the **setup wizard**. It walks through eight steps:
 
-1. **Licence:** enter the key. Without internet: *Offline activation* → download the request file → upload it on the Vayrone portal from any PC → import the licence file.
+1. **Licence:** enter the key. Without internet: *Offline activation* → download the request file → send it to Vayrone or your partner (e-mail or WhatsApp) → import the licence file you get back.
 2. **Company:** name, address, GSTIN, logo. These appear on the sign-in page.
 3. **Mail domains.**
 4. **Super administrator:** the first admin. Keep its password safe.

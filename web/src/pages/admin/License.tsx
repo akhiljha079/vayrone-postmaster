@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { formatDate, get, post } from '../../api';
 import { useAuth, useMe } from '../../auth';
 import { Badge, Button, Card, ErrorBanner, Field, Input, Modal, PageHeader, Spinner, Table, Td, Textarea, useAction, useResource } from '../../components/ui';
+import { LicenseDetails, licenseSummary, type LicenseDetailsData } from '../../components/LicenseDetails';
 
 type Status = 'unlicensed' | 'active' | 'grace' | 'expired' | 'tampered' | 'fingerprint_mismatch';
 
@@ -13,23 +14,7 @@ interface LicenseInfo {
   warning: string | null;
   graceEndsAt: string | null;
   deadline: string | null;
-  license: {
-    licenseId: string;
-    keyHint: string;
-    client: { name: string; city?: string | null; gstin?: string | null };
-    reseller: { name: string } | null;
-    plan: { code: string; name: string };
-    maxUsers: number;
-    maxExternalAccounts: number | null;
-    features: string[];
-    issuedAt: string;
-    expiresAt: string | null;
-    amcExpiresAt: string | null;
-    checkBy: string;
-    activationMode: 'online' | 'offline';
-    amcActive: boolean;
-    licensedMachineId: string;
-  } | null;
+  license: (LicenseDetailsData & { licensedMachineId: string }) | null;
   usage: { activeUsers: number; externalAccounts: number };
   machine: { id: string; available: string[]; changed: string[] };
   activation: { at: string | null; lastValidatedAt: string | null; lastHeartbeatAt: string | null; heartbeatFailures: number; lastError: string | null; serverUrl: string };
@@ -54,15 +39,6 @@ const STATUS: Record<Status, { label: string; color: 'green' | 'amber' | 'red' |
   unlicensed: { label: 'Not activated', color: 'blue' },
 };
 
-const FEATURE_LABEL: Record<string, string> = {
-  archive: 'Mail archive',
-  backup_cloud: 'Cloud backup',
-  antivirus: 'Antivirus',
-  support_access: 'Vayrone Support access',
-  journaling: 'Journaling',
-  external_fetch: 'External mailboxes',
-};
-
 const EVENT_LABEL: Record<string, string> = {
   activated: 'Activated online',
   offline_import: 'Licence file imported',
@@ -79,7 +55,6 @@ const EVENT_LABEL: Record<string, string> = {
 };
 
 const day = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
-const daysFrom = (d: string) => Math.ceil((new Date(d).getTime() - Date.now()) / 86_400_000);
 
 function download(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/octet-stream' }));
@@ -120,11 +95,18 @@ export function LicensePage() {
   const info = useResource(() => get<LicenseInfo>('/api/admin/license'));
   const events = useResource(() => get<LicenseEvent[]>('/api/admin/license/events'), [info.data]);
   const [modal, setModal] = useState<null | 'activate' | 'offline' | 'transfer'>(null);
+  const [applied, setApplied] = useState<string | null>(null);
   const isOwner = me.user.role === 'super_admin';
   const isAdmin = isOwner || me.user.role === 'admin' || me.user.role === 'vayrone_support';
   const changed = async () => {
     info.reload();
     await refresh();
+  };
+  /** After a key or licence file: show what was applied, from the licence itself. */
+  const appliedNow = async () => {
+    const fresh = await get<LicenseInfo>('/api/admin/license');
+    setApplied(fresh.license ? `Licence applied: ${licenseSummary(fresh.license)}.` : null);
+    await changed();
   };
   const check = useAction(async () => {
     await post('/api/admin/license/check');
@@ -169,6 +151,14 @@ export function LicensePage() {
         }
       />
       <ErrorBanner error={check.error} />
+      {applied && (
+        <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 ring-1 ring-emerald-200">
+          <span>{applied}</span>
+          <button className="text-emerald-700 hover:text-emerald-900" onClick={() => setApplied(null)} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className={`mb-4 rounded-lg px-4 py-3 text-sm ring-1 ${i.mode === 'readonly' ? 'bg-red-50 text-red-900 ring-red-200' : i.mode === 'grace' ? 'bg-amber-50 text-amber-900 ring-amber-200' : i.mode === 'unlicensed' ? 'bg-sky-50 text-sky-900 ring-sky-200' : 'bg-emerald-50 text-emerald-900 ring-emerald-200'}`}>
         <div className="flex items-center gap-2">
@@ -182,42 +172,7 @@ export function LicensePage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Licence">
           {l ? (
-            <>
-              <Row label="Licensed to">
-                {l.client.name}
-                {l.client.city ? `, ${l.client.city}` : ''}
-              </Row>
-              <Row label="Plan">{l.plan.name}</Row>
-              <Row label="Licence">
-                <span className="font-mono">{l.licenseId}</span> <span className="text-xs text-slate-500">(key …{l.keyHint})</span>
-              </Row>
-              <Row label="Expires">
-                {l.expiresAt ? (
-                  <>
-                    {day(l.expiresAt)}
-                    {daysFrom(l.expiresAt) >= 0 && <span className="ml-1 text-xs text-slate-500">({daysFrom(l.expiresAt)} days)</span>}
-                  </>
-                ) : (
-                  'Perpetual'
-                )}
-              </Row>
-              <Row label="AMC (updates and support)">
-                {day(l.amcExpiresAt)} <Badge color={l.amcActive ? 'green' : 'red'}>{l.amcActive ? 'Active' : 'Expired'}</Badge>
-              </Row>
-              <Row label="Validation">
-                {l.activationMode === 'online' ? 'Online, automatic' : 'Offline, by file'} — due by {day(l.checkBy)}
-              </Row>
-              {l.reseller && <Row label="Partner">{l.reseller.name}</Row>}
-              <Row label="Features">
-                <span className="flex flex-wrap justify-end gap-1">
-                  {l.features.map((f) => (
-                    <Badge key={f} color="blue">
-                      {FEATURE_LABEL[f] ?? f}
-                    </Badge>
-                  ))}
-                </span>
-              </Row>
-            </>
+            <LicenseDetails l={l} />
           ) : (
             <div className="space-y-2 text-sm text-slate-600">
               <p>This server runs in evaluation mode: up to 5 users for 30 days from installation ({day(i.installedAt)}).</p>
@@ -280,8 +235,8 @@ export function LicensePage() {
         )}
       </Card>
 
-      {modal === 'activate' && <ActivateModal onClose={() => setModal(null)} onDone={changed} />}
-      {modal === 'offline' && <OfflineModal hasLicense={Boolean(l)} onClose={() => setModal(null)} onDone={changed} />}
+      {modal === 'activate' && <ActivateModal onClose={() => setModal(null)} onDone={appliedNow} />}
+      {modal === 'offline' && <OfflineModal hasLicense={Boolean(l)} onClose={() => setModal(null)} onDone={appliedNow} />}
       {modal === 'transfer' && <TransferModal onClose={() => setModal(null)} onDone={changed} />}
     </>
   );
@@ -348,8 +303,8 @@ function OfflineModal({ hasLicense, onClose, onDone }: { hasLicense: boolean; on
           {hasLicense && <p className="mt-1 text-xs text-slate-500">Leave the key empty to re-validate the current licence (needed every 90 days for offline servers).</p>}
         </li>
         <li>
-          <div className="font-medium text-slate-900">2. On any computer with internet</div>
-          <p className="text-slate-600">Upload the request file on the Vayrone licence portal (or send it to your partner / Vayrone support). You receive a licence file (.vlic).</p>
+          <div className="font-medium text-slate-900">2. Send the request file to Vayrone Infratech or your partner</div>
+          <p className="text-slate-600">By e-mail or WhatsApp, from any computer or phone. You receive a licence file (.vlic) back. No login or website is needed.</p>
         </li>
         <li>
           <div className="mb-2 font-medium text-slate-900">3. Import the licence file</div>

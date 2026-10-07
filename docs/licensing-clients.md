@@ -8,7 +8,7 @@ For Vayrone Infratech staff who sell and issue PostMaster licences. **Never** gi
 |-------|-------|
 | **Private signing key** `vy-2026-1` | `~/.vayrone/license-signing-vy-2026-1.pem` on the build Mac, plus two offline backups. Also needed on the License Server. |
 | **Public key** | Built into every PostMaster release (`license-client/src/keys.ts`). A licence signed with any other key is rejected. |
-| **License Server** | Fastify + MySQL + admin panel, deployed on the Vayrone VPS. See [license-server/README.md](../license-server/README.md). Online servers activate and send heartbeats here. The customer portal accepts offline request files. |
+| **License Server** | Fastify + MySQL + admin panel, deployed on the Vayrone VPS. See [license-server/README.md](../license-server/README.md). Online servers activate and send heartbeats here. Offline request files are processed by Vayrone staff in the vayrone.com admin panel (Licensing → Offline licence file). |
 
 ## Normal way: License Server
 
@@ -34,7 +34,7 @@ Then, depending on whether the client's server has internet:
 - **Online:** the setup wizard (or Admin → Licence) activates the key directly. Renewals and upgrades made on the License Server reach the server at its next daily heartbeat.
 - **Offline:**
   1. The client downloads a request file (`.vreq`) from Admin → Licence → *Offline activation*.
-  2. The client uploads it on the customer portal and downloads the `.vlic` licence file. If they cannot, they e-mail the request to Vayrone and you run:
+  2. The client sends it to Vayrone (e-mail or WhatsApp). Process it in vayrone.com → Admin → Licensing → **Offline licence file**, and send back the `.vlic` file. Without the website you can also run:
 
      ```sh
      vls-cli license:offline postmaster-request-XXXXX.vreq --out agrasteel.vlic
