@@ -44,7 +44,7 @@ PrivilegesRequired=admin
 WizardStyle=modern
 LicenseFile=assets\EULA.txt
 UninstallDisplayName=Vayrone PostMaster
-UninstallDisplayIcon={app}\bin\vpm.exe
+UninstallDisplayIcon={app}\vpm.ico
 CloseApplications=no
 SetupLogging=yes
 #ifexist "assets\vpm.ico"
@@ -64,6 +64,7 @@ WelcomeLabel2=This installs Vayrone PostMaster {#AppVersion}, the LAN mail serve
 
 [Files]
 Source: "{#Root}\release\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "assets\vpm.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; MariaDB is installed with the first installation only; upgrades leave the database engine running.
 Source: "{#Root}\.cache\win\mariadb\*"; DestDir: "{app}\mariadb"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: not IsUpgrade
 Source: "{#Root}\.cache\win\WinSW-x64.exe"; DestDir: "{app}\service"; DestName: "VayronePostMaster.exe"; Flags: ignoreversion
@@ -77,10 +78,28 @@ Source: "winsw\VayronePostMasterUpdater.xml"; DestDir: "{app}\service"; Flags: i
 [Dirs]
 Name: "{commonappdata}\Vayrone PostMaster"; Permissions: admins-full system-full
 
+[Tasks]
+Name: "desktopicon"; Description: "Create a desktop shortcut to open Vayrone PostMaster"; GroupDescription: "Shortcuts:"
+
 [INI]
-Filename: "{group}\Vayrone PostMaster admin.url"; Section: "InternetShortcut"; Key: "URL"; String: "{code:AdminUrl}"
+; Shortcuts to the admin panel in the browser (the panel runs as a Windows service; there is no separate program window).
+Filename: "{group}\Open Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "URL"; String: "{code:AdminUrl}"
+Filename: "{group}\Open Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "IconFile"; String: "{app}\vpm.ico"
+Filename: "{group}\Open Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "IconIndex"; String: "0"
+Filename: "{autodesktop}\Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "URL"; String: "{code:AdminUrl}"; Tasks: desktopicon
+Filename: "{autodesktop}\Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "IconFile"; String: "{app}\vpm.ico"; Tasks: desktopicon
+Filename: "{autodesktop}\Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "IconIndex"; String: "0"; Tasks: desktopicon
+
+[InstallDelete]
+; Older name of the Start-menu link.
+Type: files; Name: "{group}\Vayrone PostMaster admin.url"
+
+[UninstallDelete]
+Type: files; Name: "{group}\Open Vayrone PostMaster.url"
+Type: files; Name: "{autodesktop}\Vayrone PostMaster.url"
 
 [Icons]
+Name: "{group}\Vayrone PostMaster status"; Filename: "{cmd}"; Parameters: "/k ""{app}\bin\vpm.exe"" status"; IconFilename: "{app}\vpm.ico"; Comment: "Is PostMaster running? Services, database and the address to open"
 Name: "{group}\Show setup wizard address"; Filename: "{cmd}"; Parameters: "/k ""{app}\bin\vpm.exe"" setup-token"; Comment: "Shows the setup wizard address while setup is not finished"
 Name: "{group}\Vayrone PostMaster command prompt"; Filename: "{cmd}"; Parameters: "/k cd /d ""{app}\bin"" && vpm.exe"; WorkingDir: "{app}\bin"
 Name: "{group}\Third-party licences"; Filename: "{app}\THIRD_PARTY_LICENSES.md"
@@ -88,6 +107,7 @@ Name: "{group}\Uninstall Vayrone PostMaster"; Filename: "{uninstallexe}"
 
 [Run]
 Filename: "{code:SetupUrl}"; Description: "Open the setup wizard"; Flags: postinstall shellexec nowait skipifsilent; Check: HasSetupUrl
+Filename: "{code:AdminUrl}"; Description: "Open Vayrone PostMaster"; Flags: postinstall shellexec nowait skipifsilent; Check: not HasSetupUrl
 
 [UninstallRun]
 Filename: "{app}\service\VayronePostMasterUpdater.exe"; Parameters: "stop"; Flags: runhidden; RunOnceId: "StopUpdater"
@@ -341,7 +361,7 @@ begin
   WizardForm.StatusLabel.Caption := 'Opening the firewall...';
   Exec(ExpandConstant('{sys}\netsh.exe'), 'advfirewall firewall delete rule name="Vayrone PostMaster"', '', SW_HIDE, ewWaitUntilTerminated, Code);
   RunHidden(ExpandConstant('{sys}\netsh.exe'),
-    'advfirewall firewall add rule name="Vayrone PostMaster" dir=in action=allow protocol=TCP localport=' + WebPort() + ',587,465,143,993,110,995 profile=domain,private',
+    'advfirewall firewall add rule name="Vayrone PostMaster" dir=in action=allow protocol=TCP localport=80,' + WebPort() + ',587,465,143,993,110,995 profile=domain,private',
     'firewall');
   // Give the service a moment to open its port before the browser starts.
   Sleep(4000);

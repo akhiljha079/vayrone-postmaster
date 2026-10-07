@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import mysql from 'mysql2/promise';
 import type { DbConfig } from './config.js';
 
-export const APP_VERSION = '0.6.1';
+export const APP_VERSION = '0.6.2';
 
 interface MigrationFile {
   version: number;

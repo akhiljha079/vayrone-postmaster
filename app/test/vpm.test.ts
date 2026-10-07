@@ -30,7 +30,7 @@ describe('vpm executable', () => {
     await main(['help']);
     expect(out[0]).toBe(`Vayrone PostMaster ${APP_VERSION} — Vayrone Infratech`);
     expect(out[1]).toMatch(/^[A-Za-z0-9_-]{32}$/);
-    expect(out[2]).toContain('Usage: vpm <core|worker|all|cli|init|setup-token|hwid|version>');
+    expect(out[2]).toContain('Usage: vpm <status|core|worker|all|cli|init|setup-token|hwid|version>');
     process.exitCode = 0;
     await main(['nonsense']);
     expect(process.exitCode).toBe(1);

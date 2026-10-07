@@ -43,7 +43,8 @@ export interface CoreConfig {
   /** DPAPI-protected master key blob (Windows). */
   masterKeyDpapiFile?: string;
   /** Web admin / webmail listener (HTTPS unless tls is false). */
-  web: { port: number; tls: boolean; trustProxy: boolean };
+  /** httpPort: plain-HTTP port that only redirects to the HTTPS admin panel (0 = off), so typing "localhost" works. */
+  web: { port: number; tls: boolean; trustProxy: boolean; httpPort: number };
   /** Directory with the built web SPA (web/dist). */
   webRoot?: string;
   worker: { pollMs: number; fetchConcurrency: number; fetchPerHost: number; fetchMaxPerRun: number };
@@ -69,7 +70,7 @@ export const DEFAULT_CONFIG: Omit<CoreConfig, 'installId' | 'db'> = {
   dedupWindowHours: 72,
   storeCodec: 'zstd',
   logLevel: 'info',
-  web: { port: 443, tls: true, trustProxy: false },
+  web: { port: 443, tls: true, trustProxy: false, httpPort: 80 },
   worker: { pollMs: 2000, fetchConcurrency: 50, fetchPerHost: 8, fetchMaxPerRun: 200 },
   ipc: { port: 7725 },
 };

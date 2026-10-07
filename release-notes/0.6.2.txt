@@ -1,0 +1,10 @@
+Vayrone PostMaster 0.6.2
+
+Easier to open
+- Desktop shortcut "Vayrone PostMaster" and Start menu "Open Vayrone PostMaster" (with the PostMaster icon).
+  PostMaster runs as Windows services; it opens in your browser.
+- Typing just "localhost" (or the server name) in the browser now works: plain HTTP forwards to the
+  secure admin address (unless another web server already uses port 80).
+- New Start menu item "Vayrone PostMaster status" (vpm status): shows whether each service and the
+  database are running, and the exact address to open.
+- The installer's last page offers "Open Vayrone PostMaster" (also after upgrades).

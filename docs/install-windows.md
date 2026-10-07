@@ -39,7 +39,16 @@ If IIS or another web server already uses port 443, the installer suggests 8443.
    - opens the firewall ports.
 7. **Finish.** The browser opens the **setup wizard** at `https://localhost/setup`, or `https://localhost:8443/setup`.
 
-The browser warns about the certificate the first time. This is expected; a self-signed certificate is created for you. Continue to the page.
+The browser warns about the certificate the first time. This is expected; a self-signed certificate is created for you. Choose *Advanced*, then *Continue to localhost*.
+
+## Opening PostMaster
+
+PostMaster runs as Windows services in the background, so there is no program window. You open it in the browser:
+
+- **Desktop:** double-click **Vayrone PostMaster** (created by the installer).
+- **Start menu:** *Vayrone PostMaster → Open Vayrone PostMaster*.
+- **Typing the address:** `https://localhost` on the server (or `https://localhost:8443` if you chose port 8443). From other PCs use the server name, for example `https://mail.company.local`. Typing just `localhost` also works: plain HTTP on port 80 forwards to the HTTPS address, unless another web server (such as IIS) already uses port 80.
+- **Nothing opens?** Start menu → **Vayrone PostMaster status**. It shows whether each service and the database are running and the exact address to open.
 
 ## Setup wizard
 
@@ -72,6 +81,7 @@ To open the wizard from another PC, use `https://<server-ip>/setup?token=<token>
 | Database root password (for Vayrone support) | `C:\ProgramData\Vayrone PostMaster\mariadb-root.txt` |
 | Mail, database, logs | The data folder you chose; logs in `<data>\logs` |
 | Command line | Start menu → *Vayrone PostMaster command prompt*, then `vpm cli help` |
+| Health check | Start menu → *Vayrone PostMaster status* (`vpm status`) |
 
 ## Uninstalling
 
@@ -83,7 +93,8 @@ To open the wizard from another PC, use `https://<server-ip>/setup?token=<token>
 
 | Problem | What to check |
 |---------|---------------|
-| Browser cannot open the admin page | Is the *Vayrone PostMaster* service running (`services.msc`)? Is the port right? Look in `<data>\logs\VayronePostMaster.out.log`. |
+| Browser cannot open the admin page | Run Start menu → **Vayrone PostMaster status**. It shows each service, the database and the exact address (use **https://**). Then look in `<data>\logs\VayronePostMaster.out.log`. |
+| `localhost` alone does not open | Type `https://localhost` (or `https://localhost:8443`). Port 80 is taken by another web server, so the automatic forwarding is off. |
 | Service stops right after starting | Look in the same log. Typical causes: another program uses a mail port (change the port in Admin → Network & TLS, or stop the other program), or the database service is stopped. |
 | Port 443 in use | Use 8443, or stop the other web server. |
 | PCs cannot reach the server | Windows Firewall on a *public* network profile: set the network to *private*, or allow the ports for the public profile. |

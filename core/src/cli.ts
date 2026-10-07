@@ -16,6 +16,7 @@ import { createInterface } from 'node:readline/promises';
 const USAGE = `Usage: vpm cli <command>
   init --data <dir> [options]              First install: database, config, master key, schema, setup token
                                            (installers run this; see installer/README.md for the options)
+  status                                   Is PostMaster running? Services, database, and the address to open
   setup-token                              Show the setup wizard address while setup is not finished
   migrate                                  Create / upgrade the database schema
   keygen                                   Create the master encryption key (installer)
@@ -108,10 +109,78 @@ async function init(a: string[], d: CliDefaults): Promise<void> {
   }
 }
 
+/** Plain-language health check for technicians and owners ("nothing opens"). */
+async function status(d: CliDefaults): Promise<void> {
+  const ok = (b: boolean) => (b ? 'OK     ' : 'PROBLEM');
+  const configPath = process.env.VPM_CONFIG ?? d.configPath ?? 'vpm.config.json';
+  let config;
+  try {
+    config = loadConfig(configPath);
+  } catch (e) {
+    console.log(`PROBLEM  The installation is not finished: ${(e as Error).message}`);
+    if (process.platform === 'win32') console.log('         See C:\\ProgramData\\Vayrone PostMaster\\install.log, then run the installer again.');
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`Vayrone PostMaster status (${config.hostname})\n`);
+  if (process.platform === 'win32') {
+    const { execFileSync } = await import('node:child_process');
+    for (const [svc, what] of [
+      ['VayronePostMasterDB', 'database'],
+      ['VayronePostMaster', 'mail server and admin panel'],
+      ['VayronePostMasterWorker', 'fetching, sending, backups'],
+      ['VayronePostMasterUpdater', 'updates'],
+    ] as const) {
+      let state = 'not installed';
+      try {
+        state = /STATE\s+:\s+\d+\s+(\w+)/.exec(execFileSync('sc.exe', ['query', svc], { encoding: 'utf8' }))?.[1] ?? 'unknown';
+      } catch {
+        /* not installed */
+      }
+      console.log(`${ok(state === 'RUNNING')}  Service ${svc} (${what}): ${state.toLowerCase()}`);
+    }
+  }
+  let dbOk = false;
+  let setupDone = false;
+  try {
+    setupDone = await setupCompleted(config.db);
+    dbOk = true;
+  } catch (e) {
+    console.log(`PROBLEM  Database not reachable: ${(e as Error).message}`);
+  }
+  if (dbOk) console.log(`OK       Database reachable`);
+  const portPart = config.web.port === 443 && config.web.tls ? '' : `:${config.web.port}`;
+  const url = `${config.web.tls ? 'https' : 'http'}://localhost${portPart}/`;
+  const { request } = await import(config.web.tls ? 'node:https' : 'node:http');
+  const webOk = await new Promise<boolean>((resolve) => {
+    const r = request({ host: '127.0.0.1', port: config.web.port, path: '/api/health', rejectUnauthorized: false, timeout: 5000 }, (res: { statusCode?: number; resume(): void }) => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    });
+    r.on('error', () => resolve(false));
+    r.on('timeout', () => (r.destroy(), resolve(false)));
+    r.end();
+  });
+  console.log(`${ok(webOk)}  Admin panel answering on port ${config.web.port}`);
+  console.log('');
+  console.log(`Open on this server:   ${url}`);
+  console.log(`Open from other PCs:   ${url.replace('localhost', config.hostname)}`);
+  if (config.web.tls) console.log('The browser warns about the certificate until it is trusted (see the mail clients guide); choose "Advanced", then "Continue".');
+  if (dbOk && !setupDone) {
+    const t = ensureSetupToken(config.dataPath);
+    console.log(`Setup is not finished. Setup wizard:  ${url}setup?token=${t}`);
+  }
+  if (!webOk) {
+    process.exitCode = 1;
+    console.log(process.platform === 'win32' ? 'Logs: C:\\ProgramData\\Vayrone PostMaster\\data\\logs (or the data folder chosen during setup).' : 'Logs: journalctl -u vayrone-postmaster');
+  }
+}
+
 export async function runCli(argv: string[], d: CliDefaults = {}): Promise<void> {
   const [cmd, ...a] = argv;
   if (!cmd || cmd === 'help') return console.log(USAGE);
   if (cmd === 'init') return init(a, d);
+  if (cmd === 'status') return status(d);
   const config = loadConfig(process.env.VPM_CONFIG ?? d.configPath);
   if (cmd === 'setup-token') {
     if (await setupCompleted(config.db)) return console.log('Setup is complete; sign in at the admin panel.');

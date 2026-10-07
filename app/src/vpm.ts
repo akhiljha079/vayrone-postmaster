@@ -135,6 +135,7 @@ export async function main(argv: string[]): Promise<void> {
     case 'init':
     case 'hwid':
     case 'setup-token':
+    case 'status':
     case 'migrate':
       return runCli([cmd, ...rest], { home: installHome(), configPath: defaultConfigPath() });
     case 'update-apply': {
@@ -160,7 +161,8 @@ export async function main(argv: string[]): Promise<void> {
       return;
     default:
       console.log(`Vayrone PostMaster ${APP_VERSION} by Vayrone Infratech
-Usage: vpm <core|worker|all|cli|init|setup-token|hwid|version>
+Usage: vpm <status|core|worker|all|cli|init|setup-token|hwid|version>
+  status   is it running? services, database, and the address to open
   core     mail server + web admin (service)
   worker   fetcher, outbound queue, backups (service)
   all      everything in one process
