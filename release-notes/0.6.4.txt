@@ -1,0 +1,10 @@
+Vayrone PostMaster 0.6.4
+
+New: Admin > Easy rules
+- Copy all mail of a person (incoming, outgoing or both) to someone: for one person, a group,
+  a domain or everyone.
+- Copy mail from a sender (an address or a whole company, e.g. @bigclient.com).
+- Copy all mail exchanged with an outside address.
+- Copy mail by words in the subject or text.
+- Forward a person's mail (e.g. while on leave), optionally keeping it in their mailbox.
+- Every rule is shown as a plain sentence, with an on/off switch.

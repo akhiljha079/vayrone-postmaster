@@ -80,6 +80,15 @@ export function rulesRoutes(ctx: CoreContext) {
     app.post('/rules/test', { preHandler: read }, async (req) => testRule(ctx, req.body));
 
     // ------------------------------------------------------------ per-user forwarding & out of office
+    /** Every user's forwarding in one list (Admin → Easy rules). */
+    app.get('/forwardings', { preHandler: read }, async () =>
+      (
+        await rows<{ user_id: number; login: string; display_name: string; target_address: string; keep_local_copy: number; is_enabled: number }>(
+          ctx.db,
+          'SELECT f.user_id, u.login, u.display_name, f.target_address, f.keep_local_copy, f.is_enabled FROM forwardings f JOIN users u ON u.id = f.user_id ORDER BY u.login, f.id',
+        )
+      ).map((f) => ({ userId: f.user_id, login: f.login, name: f.display_name, address: f.target_address, keepLocalCopy: Boolean(f.keep_local_copy), isEnabled: Boolean(f.is_enabled) })),
+    );
     app.get<{ Params: { id: string } }>('/users/:id/forwarding', { preHandler: read }, async (req) => getForwarding(ctx, Id.parse(req.params.id)));
     app.put<{ Params: { id: string } }>('/users/:id/forwarding', { preHandler: write }, async (req) => {
       const id = Id.parse(req.params.id);

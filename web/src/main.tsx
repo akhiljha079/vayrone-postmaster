@@ -15,6 +15,7 @@ import { QueuePage, RelayPage } from './pages/admin/Relay';
 import { CompanyPage, LogsPage, SecurityPage, SessionsPage } from './pages/admin/System';
 import { ExternalPage } from './pages/admin/External';
 import { JournalPage, MailRulesPage, UserMailSettingsPage } from './pages/admin/MailRules';
+import { EasyRulesPage } from './pages/admin/EasyRules';
 import { MailSettings } from './pages/MailSettings';
 import { ArchivePage } from './pages/admin/Archive';
 import { BackupsPage } from './pages/admin/Backups';
@@ -130,6 +131,7 @@ function App() {
           ['/admin/lists', <Lists />],
           ['/admin/groups', <Groups />],
           ['/admin/external', <ExternalPage />],
+          ['/admin/easy-rules', <EasyRulesPage />],
           ['/admin/rules', <MailRulesPage />],
           ['/admin/journal', <JournalPage />],
           ['/admin/users/:id/mail', <UserMailSettingsPage />],

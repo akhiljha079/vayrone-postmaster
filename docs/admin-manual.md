@@ -66,6 +66,23 @@ Use **Test** to check a connection before saving. The list shows each account's 
 
 ## 6. Mail rules and journaling
 
+### Easy rules (start here)
+
+**Admin → Easy rules** covers the common jobs in a few clicks, written as plain sentences:
+
+| Job | Example |
+|-----|---------|
+| Copy all mail of a person | Every email Rahul sends **and** receives also goes to the manager (or only incoming, or only outgoing). Works for a person, a group, a whole domain or everyone. |
+| Copy mail from a sender | When anyone (or one person) gets mail from `@bigclient.com` or `ceo@bigclient.com`, accounts gets a copy. |
+| Copy mail to or from an address | All mail your team exchanges with `orders@sharma.com` is copied to the owner. |
+| Copy mail by subject or words | Emails with "invoice" in the subject (or text) are copied to accounts. |
+| Forward a person's mail | While Priya is on leave, her mail goes to Rahul, optionally also staying in her mailbox. |
+
+- **How copies arrive:** the copy is the original email, sent the moment the mail is sent or received, to a colleague or an outside address. Copies never trigger more copies.
+- **Rules in use:** every copy and forwarding rule is listed on the same page as a sentence, with an on/off switch and *Delete*.
+- **More options:** several conditions, moving mail to folders, auto-replies and rejecting mail are on the *Mail rules* and *Journaling* pages described below.
+
+
 - **Mail rules:** global (admin) or per user (webmail → Mail settings).
   - **Conditions:** from, to, cc, subject, body, header, size, attachment or extension, direction, time.
   - **Actions:** move, copy, forward, redirect, auto-reply, reject, discard, flag, mark read, add header, stop.

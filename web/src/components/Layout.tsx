@@ -158,6 +158,7 @@ const ADMIN_NAV: { to: string; label: string; roles?: string[] }[] = [
   { to: '/admin/lists', label: 'Distribution lists', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/groups', label: 'Groups', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/external', label: 'External mailboxes', roles: ['super_admin', 'admin', 'vayrone_support'] },
+  { to: '/admin/easy-rules', label: 'Easy rules', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/rules', label: 'Mail rules', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/journal', label: 'Journaling', roles: ['super_admin', 'admin', 'vayrone_support'] },
   { to: '/admin/relay', label: 'SMTP relay', roles: ['super_admin', 'admin', 'vayrone_support'] },
