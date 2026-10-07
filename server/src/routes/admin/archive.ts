@@ -1,9 +1,9 @@
 // Compliance archive (read-only for everyone; retention removes items), retention policies.
 // Every search, view and export is written to the audit log.
 import { PassThrough } from 'node:stream';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { ARCHIVE_DEFAULTS, EXPORT_LIMIT, db as dbm, exportMessages, fulltextQuery, type ArchivePolicy, type CoreContext } from '@vpm/core';
+import { ARCHIVE_DEFAULTS, ARCHIVE_TREE_LIMIT, EXPORT_LIMIT, db as dbm, exportArchiveTree, exportMessages, fulltextQuery, type ArchivePolicy, type ArchiveTreeEntry, type CoreContext } from '@vpm/core';
 import { audit, requireAdmin } from '../../guards.js';
 import { badRequest, notFound, page, parsePatch } from '../../http.js';
 import { attachmentOf, contentDisposition, renderMessage } from '../../webmail/render.js';
@@ -17,6 +17,8 @@ const Criteria = z.object({
   to: z.coerce.date().optional(),
   direction: z.enum(['in', 'out', 'internal']).optional(),
   userId: z.coerce.number().int().positive().optional(),
+  /** With userId: only that mailbox's received or sent mail. */
+  role: z.enum(['received', 'sent']).optional(),
   sender: z.string().max(254).optional(),
   recipient: z.string().max(254).optional(),
   legalHold: z.coerce.boolean().optional(),
@@ -29,7 +31,8 @@ function where(c: Criteria): { sql: string; vals: unknown[] } {
   if (c.from) (w.push('a.archived_at >= ?'), v.push(c.from));
   if (c.to) (w.push('a.archived_at < ?'), v.push(new Date(c.to.getTime() + 86400_000)));
   if (c.direction) (w.push('a.direction = ?'), v.push(c.direction));
-  if (c.userId) (w.push('EXISTS (SELECT 1 FROM archive_item_users u WHERE u.archive_id = a.id AND u.user_id = ?)'), v.push(c.userId));
+  if (c.userId && c.role) (w.push('EXISTS (SELECT 1 FROM archive_item_users u WHERE u.archive_id = a.id AND u.user_id = ? AND u.role = ?)'), v.push(c.userId, c.role));
+  else if (c.userId) (w.push('EXISTS (SELECT 1 FROM archive_item_users u WHERE u.archive_id = a.id AND u.user_id = ?)'), v.push(c.userId));
   if (c.sender) (w.push('(a.envelope_from LIKE ? OR m.hdr_from LIKE ?)'), v.push(`%${c.sender}%`, `%${c.sender}%`));
   if (c.recipient) (w.push('CAST(a.envelope_rcpts AS CHAR) LIKE ?'), v.push(`%${c.recipient.toLowerCase()}%`));
   if (c.legalHold) w.push('a.legal_hold = 1');
@@ -58,6 +61,37 @@ export function archiveRoutes(ctx: CoreContext) {
 
   const logAccess = (req: FastifyRequest, action: string, target: number | null, details?: Record<string, unknown>) => audit(ctx, req, action, 'archive', target, details);
 
+  /** ZIP of whole mailboxes from the archive, one folder per address with Received and Sent. */
+  async function exportByMailbox(req: FastifyRequest, reply: FastifyReply, userIds?: number[]) {
+    const entries = (
+      await rows<{ messageId: number; address: string | null; login: string | null; userId: number; role: 'received' | 'sent'; archiveId: number }>(
+        ctx.db,
+        `SELECT a.message_id AS messageId, x.address, u.login, x.user_id AS userId, x.role, a.id AS archiveId
+           FROM archive_item_users x
+           JOIN archive_items a ON a.id = x.archive_id
+           LEFT JOIN users u ON u.id = x.user_id
+          ${userIds?.length ? 'WHERE x.user_id IN (?)' : ''}
+          ORDER BY x.user_id, x.role, a.id
+          LIMIT ?`,
+        userIds?.length ? [userIds, ARCHIVE_TREE_LIMIT] : [ARCHIVE_TREE_LIMIT],
+      )
+    ).map<ArchiveTreeEntry>((e) => ({ messageId: e.messageId, address: e.address ?? e.login ?? `deleted-user-${e.userId}`, role: e.role, archiveId: e.archiveId }));
+    if (!entries.length) throw badRequest('Nothing to export');
+    const mailboxes = [...new Set(entries.map((e) => e.address))];
+    const rec = await exec(ctx.db, "INSERT INTO archive_exports (requested_by, criteria, format, status, item_count, created_at, finished_at) VALUES (?,?,'eml_zip','done',?,?,?)", [
+      req.auth!.user.id,
+      JSON.stringify({ layout: 'mailboxes', userIds: userIds ?? 'all' }),
+      entries.length,
+      new Date(),
+      new Date(),
+    ]);
+    await logAccess(req, 'archive.export', rec.insertId, { layout: 'mailboxes', mailboxes: mailboxes.slice(0, 50), count: entries.length });
+    const stream = new PassThrough();
+    void exportArchiveTree(ctx.db, ctx.blobs, entries, stream).catch((err) => stream.destroy(err as Error));
+    const name = mailboxes.length === 1 ? `archive-${mailboxes[0]}-${new Date().toISOString().slice(0, 10)}.zip` : `archive-mailboxes-${new Date().toISOString().slice(0, 10)}.zip`;
+    return reply.type('application/zip').header('content-disposition', contentDisposition(name)).send(stream);
+  }
+
   return async (app: FastifyInstance) => {
     // ------------------------------------------------------------ policy
     app.get('/archive/policy', { preHandler: read }, async () => ({
@@ -71,6 +105,27 @@ export function archiveRoutes(ctx: CoreContext) {
       await ctx.settings.set('archive', 'policy', next, req.auth!.user.id);
       await audit(ctx, req, 'archive.policy_update', 'settings', 'archive.policy', b);
       return next;
+    });
+
+    // ------------------------------------------------------------ mailboxes (one folder per address)
+    /** Every address with archived mail: received and sent counts. Includes deleted accounts. */
+    app.get<{ Querystring: { q?: string } }>('/archive/mailboxes', { preHandler: read }, async (req) => {
+      const q = z.string().max(254).optional().parse(req.query.q)?.trim();
+      const list = await rows<{ userId: number; address: string | null; name: string | null; exists: number; received: number; sent: number; last: Date | null }>(
+        ctx.db,
+        `SELECT x.user_id AS userId, COALESCE(MAX(x.address), MAX(u.login)) AS address, MAX(u.display_name) AS name, COUNT(u.id) > 0 AS \`exists\`,
+                SUM(x.role = 'received') AS received, SUM(x.role = 'sent') AS sent, MAX(a.archived_at) AS last
+           FROM archive_item_users x
+           JOIN archive_items a ON a.id = x.archive_id
+           LEFT JOIN users u ON u.id = x.user_id
+          GROUP BY x.user_id
+          ORDER BY address`,
+      );
+      const items = list
+        .map((m) => ({ userId: m.userId, address: m.address ?? `deleted-user-${m.userId}`, name: m.name, deleted: !Number(m.exists), received: Number(m.received), sent: Number(m.sent), last: m.last }))
+        .filter((m) => !q || m.address.toLowerCase().includes(q.toLowerCase()) || (m.name ?? '').toLowerCase().includes(q.toLowerCase()));
+      await logAccess(req, 'archive.mailboxes', null, q ? { q } : undefined);
+      return { items };
     });
 
     // ------------------------------------------------------------ search
@@ -93,7 +148,11 @@ export function archiveRoutes(ctx: CoreContext) {
     app.get<{ Params: { id: string }; Querystring: { images?: string } }>('/archive/items/:id', { preHandler: read }, async (req) => {
       const a = await item(Id.parse(req.params.id));
       const r = await renderMessage(await ctx.store.loadRaw(a), req.query.images === '1');
-      const users = await rows<{ login: string }>(ctx.db, 'SELECT u.login FROM archive_item_users x JOIN users u ON u.id = x.user_id WHERE x.archive_id = ?', [a.id]);
+      const users = await rows<{ login: string; role: string }>(
+        ctx.db,
+        'SELECT COALESCE(x.address, u.login) AS login, x.role FROM archive_item_users x LEFT JOIN users u ON u.id = x.user_id WHERE x.archive_id = ? ORDER BY x.role, login',
+        [a.id],
+      );
       await logAccess(req, 'archive.view', a.id);
       return {
         ...r,
@@ -104,7 +163,8 @@ export function archiveRoutes(ctx: CoreContext) {
         archivedAt: a.archived_at,
         retentionUntil: a.retention_until,
         legalHold: Boolean(a.legal_hold),
-        users: users.map((u) => u.login),
+        users: [...new Set(users.map((u) => u.login))],
+        mailboxes: users.map((u) => ({ address: u.login, role: u.role })),
       };
     });
 
@@ -124,7 +184,18 @@ export function archiveRoutes(ctx: CoreContext) {
 
     /** Streams matching messages as MBOX or ZIP (max 10,000). Logged with its criteria. */
     app.post('/archive/export', { preHandler: read, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
-      const b = z.object({ format: z.enum(['mbox', 'eml_zip']), ids: z.array(Id).max(EXPORT_LIMIT).optional(), criteria: Criteria.optional() }).parse(req.body);
+      const b = z
+        .object({
+          format: z.enum(['mbox', 'eml_zip']),
+          ids: z.array(Id).max(EXPORT_LIMIT).optional(),
+          criteria: Criteria.optional(),
+          /** 'mailboxes': ZIP with <address>/Received and <address>/Sent folders. */
+          layout: z.enum(['flat', 'mailboxes']).default('flat'),
+          /** layout 'mailboxes': these mailboxes (all when omitted). */
+          userIds: z.array(Id).max(10_000).optional(),
+        })
+        .parse(req.body);
+      if (b.layout === 'mailboxes') return exportByMailbox(req, reply, b.userIds);
       let ids: number[];
       if (b.ids?.length) {
         ids = (await rows<{ message_id: number }>(ctx.db, 'SELECT message_id FROM archive_items WHERE id IN (?) ORDER BY id', [b.ids])).map((r) => r.message_id);

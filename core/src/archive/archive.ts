@@ -25,7 +25,10 @@ export interface ArchiveInput {
   direction: 'in' | 'out' | 'internal';
   envelopeFrom: string;
   envelopeTo: string[];
-  userIds: number[];
+  /** Local users the message was delivered to (their "Received" archive folder). */
+  recipientUserIds: number[];
+  /** Local users who sent it (their "Sent" archive folder). */
+  senderUserIds: number[];
 }
 
 export class Archiver {
@@ -67,7 +70,8 @@ export class Archiver {
     if (!(await this.active())) return null;
     const policy = await this.policy();
     if (a.direction === 'internal' && !policy.includeInternal) return null;
-    const days = await this.retentionDays(a.userIds, policy.retentionDays);
+    const userIds = [...new Set([...a.recipientUserIds, ...a.senderUserIds])];
+    const days = await this.retentionDays(userIds, policy.retentionDays);
     const now = new Date();
     const r = await exec(
       this.db,
@@ -86,8 +90,15 @@ export class Archiver {
       ],
     );
     await exec(this.db, 'UPDATE messages SET refcount = refcount + 1 WHERE id = ?', [a.messageId]);
-    const users = [...new Set(a.userIds)];
-    if (users.length) await exec(this.db, 'INSERT IGNORE INTO archive_item_users (archive_id, user_id) VALUES ?', [users.map((u) => [r.insertId, u])]);
+    if (userIds.length) {
+      // The address at archive time names the mailbox folder, even after the account is renamed or deleted.
+      const logins = new Map((await rows<{ id: number; login: string }>(this.db, 'SELECT id, login FROM users WHERE id IN (?)', [userIds])).map((u) => [u.id, u.login]));
+      const links = [
+        ...[...new Set(a.recipientUserIds)].map((u) => [r.insertId, u, 'received', logins.get(u) ?? null]),
+        ...[...new Set(a.senderUserIds)].map((u) => [r.insertId, u, 'sent', logins.get(u) ?? null]),
+      ];
+      await exec(this.db, 'INSERT IGNORE INTO archive_item_users (archive_id, user_id, role, address) VALUES ?', [links]);
+    }
     return r.insertId;
   }
 }

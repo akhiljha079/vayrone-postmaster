@@ -1,0 +1,13 @@
+Vayrone PostMaster 0.6.0
+
+New
+- Archive by mailbox: Admin > Archive > Mailboxes shows one folder per e-mail address,
+  each with Received and Sent, holding every message that address got and sent.
+  Download one mailbox or all of them as a ZIP with the same folders (.eml files).
+- The archive keeps mail even when users delete it, empty Trash or their account is removed.
+- Webmail works more like Outlook:
+  - drag messages onto a folder to move them;
+  - create subfolders with + next to a folder;
+  - "Always move from sender..." on any message creates a rule and can file existing mail too;
+  - "Run now" applies a rule to the mail already in your Inbox.
+- Folders made in webmail appear in Outlook, Thunderbird and on phones automatically.

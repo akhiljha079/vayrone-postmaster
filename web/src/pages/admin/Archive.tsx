@@ -277,23 +277,195 @@ function RetentionCard() {
   );
 }
 
+interface ArchiveMailbox {
+  userId: number;
+  address: string;
+  name: string | null;
+  deleted: boolean;
+  received: number;
+  sent: number;
+  last: string | null;
+}
+
+/** The archive as folders: one per address, each with Received and Sent. */
+function Mailboxes({ onOpen }: { onOpen: (id: number) => void }) {
+  const [q, setQ] = useState('');
+  const list = useResource(() => get<{ items: ArchiveMailbox[] }>(`/api/admin/archive/mailboxes`), []);
+  const [sel, setSel] = useState<{ userId: number; role: 'received' | 'sent' } | null>(null);
+  const [pageNo, setPageNo] = useState(1);
+  const qs = sel ? new URLSearchParams({ userId: String(sel.userId), role: sel.role, page: String(pageNo), pageSize: '50' }).toString() : '';
+  const msgs = useResource(() => (sel ? get<{ items: Hit[]; total: number }>(`/api/admin/archive/search?${qs}`) : Promise.resolve(null)), [qs]);
+  const exportAct = useAction(async (userIds?: number[]) => {
+    await downloadPost('/api/admin/archive/export', { format: 'eml_zip', layout: 'mailboxes', ...(userIds ? { userIds } : {}) }, 'archive-mailboxes.zip');
+  });
+  const shown = (list.data?.items ?? []).filter((m) => !q || m.address.toLowerCase().includes(q.toLowerCase()) || (m.name ?? '').toLowerCase().includes(q.toLowerCase()));
+  const current = list.data?.items.find((m) => m.userId === sel?.userId) ?? null;
+  const pick = (userId: number, role: 'received' | 'sent') => {
+    setSel({ userId, role });
+    setPageNo(1);
+  };
+  return (
+    <div className="grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <Card
+        title={`Mailboxes${list.data ? ` (${list.data.items.length})` : ''}`}
+        actions={
+          list.data?.items.length ? (
+            <Button variant="secondary" busy={exportAct.busy} onClick={() => void exportAct.run()} title="One folder per address, with Received and Sent">
+              Download all
+            </Button>
+          ) : null
+        }
+      >
+        <div className="space-y-3">
+          <Input placeholder="Find an address or name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find mailbox" />
+          {!list.data ? (
+            <Spinner />
+          ) : !shown.length ? (
+            <Empty>{list.data.items.length ? 'No mailbox matches.' : 'Nothing archived yet.'}</Empty>
+          ) : (
+            <ul className="max-h-[60vh] space-y-0.5 overflow-y-auto text-sm" aria-label="Archived mailboxes">
+              {shown.map((m) => {
+                const open = sel?.userId === m.userId;
+                return (
+                  <li key={m.userId}>
+                    <button
+                      onClick={() => pick(m.userId, 'received')}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${open ? 'bg-brand-50 text-brand-900' : 'hover:bg-slate-50'}`}
+                    >
+                      <span aria-hidden>{open ? '📂' : '📁'}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{m.address}</span>
+                        {m.name && <span className="block truncate text-xs text-slate-500">{m.name}</span>}
+                      </span>
+                      {m.deleted && <Badge color="slate">Deleted user</Badge>}
+                    </button>
+                    {open && (
+                      <div className="ml-6 mt-0.5 space-y-0.5">
+                        {(['received', 'sent'] as const).map((role) => (
+                          <button
+                            key={role}
+                            onClick={() => pick(m.userId, role)}
+                            className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left ${sel?.role === role ? 'bg-brand-100 font-medium text-brand-900' : 'text-slate-700 hover:bg-slate-50'}`}
+                          >
+                            <span aria-hidden>{role === 'received' ? '📥' : '📤'}</span>
+                            {role === 'received' ? 'Received' : 'Sent'}
+                            <span className="ml-auto text-xs tabular text-slate-500">{(role === 'received' ? m.received : m.sent).toLocaleString('en-IN')}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </Card>
+      <div className="min-w-0 space-y-3">
+        <ErrorBanner error={list.error ?? msgs.error ?? exportAct.error} />
+        {!sel || !current ? (
+          <Card>
+            <Empty>Choose a mailbox. Every address has a Received and a Sent folder holding all mail it got and sent, including mail the user has deleted.</Empty>
+          </Card>
+        ) : (
+          <Card
+            title={
+              <span>
+                {current.address} <span className="font-normal text-slate-500">/ {sel.role === 'received' ? 'Received' : 'Sent'}</span>
+              </span>
+            }
+            actions={
+              <Button variant="secondary" busy={exportAct.busy} onClick={() => void exportAct.run([current.userId])}>
+                Download this mailbox (.zip)
+              </Button>
+            }
+          >
+            {!msgs.data ? (
+              <Spinner />
+            ) : !msgs.data.items.length ? (
+              <Empty>No {sel.role === 'received' ? 'received' : 'sent'} mail archived for this address.</Empty>
+            ) : (
+              <>
+                <Table head={['Date', sel.role === 'sent' ? 'To' : 'From', 'Subject', 'Size']}>
+                  {msgs.data.items.map((h) => (
+                    <tr key={h.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpen(h.id)}>
+                      <Td className="whitespace-nowrap text-xs">{formatDate(h.date ?? h.archivedAt)}</Td>
+                      <Td className="max-w-[14rem] truncate">{sel.role === 'sent' ? h.envelopeRcpts.join(', ') : (h.fromHeader ?? h.envelopeFrom)}</Td>
+                      <Td className="max-w-md truncate">
+                        {h.hasAttachments ? '📎 ' : ''}
+                        {h.subject || '(no subject)'}
+                        {h.legalHold ? (
+                          <span className="ml-1">
+                            <Badge color="amber">Hold</Badge>
+                          </span>
+                        ) : null}
+                      </Td>
+                      <Td className="tabular text-xs">{formatBytes(h.size)}</Td>
+                    </tr>
+                  ))}
+                </Table>
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <Button variant="secondary" disabled={pageNo <= 1} onClick={() => setPageNo(pageNo - 1)}>
+                    Previous
+                  </Button>
+                  <span className="text-slate-500">
+                    {msgs.data.total.toLocaleString('en-IN')} message(s) · page {pageNo}
+                  </span>
+                  <Button variant="secondary" disabled={pageNo * 50 >= msgs.data.total} onClick={() => setPageNo(pageNo + 1)}>
+                    Next
+                  </Button>
+                </div>
+              </>
+            )}
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ArchivePage() {
+  const [tab, setTab] = useState<'mailboxes' | 'search' | 'settings'>('mailboxes');
+  const [open, setOpen] = useState<number | null>(null);
+  const tabs = { mailboxes: 'Mailboxes', search: 'Search', settings: 'Retention & settings' } as const;
+  return (
+    <div>
+      <PageHeader title="Compliance archive" description="Every message sent or received, kept read-only until its retention date, even when users delete it. All searches, views and exports are recorded in the audit log." />
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
+        {(Object.keys(tabs) as (keyof typeof tabs)[]).map((k) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm ${tab === k ? 'border-brand-600 font-medium text-brand-700' : 'border-transparent text-slate-600 hover:text-slate-900'}`}>
+            {tabs[k]}
+          </button>
+        ))}
+      </div>
+      {tab === 'mailboxes' && <Mailboxes onOpen={setOpen} />}
+      {tab === 'search' && <ArchiveSearch onOpen={setOpen} />}
+      {tab === 'settings' && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <PolicyCard />
+          <RetentionCard />
+        </div>
+      )}
+      {open !== null && <Viewer id={open} onClose={() => setOpen(null)} onChanged={() => undefined} />}
+    </div>
+  );
+}
+
+function ArchiveSearch({ onOpen }: { onOpen: (id: number) => void }) {
   const users = useUserOptions();
   const [f, setF] = useState({ q: '', from: '', to: '', direction: '', userId: '', sender: '', recipient: '' });
   const [criteria, setCriteria] = useState<Record<string, string> | null>(null);
   const [pageNo, setPageNo] = useState(1);
   const qs = criteria ? new URLSearchParams({ ...Object.fromEntries(Object.entries(criteria).filter(([, v]) => v)), page: String(pageNo), pageSize: '50' }).toString() : '';
   const res = useResource(() => (criteria ? get<{ items: Hit[]; total: number }>(`/api/admin/archive/search?${qs}`) : Promise.resolve(null)), [qs]);
-  const [open, setOpen] = useState<number | null>(null);
   const exportAct = useAction(async (format: 'mbox' | 'eml_zip') => {
     const c = Object.fromEntries(Object.entries(criteria ?? {}).filter(([, v]) => v));
     await downloadPost('/api/admin/archive/export', { format, criteria: c }, format === 'mbox' ? 'archive.mbox' : 'archive.zip');
   });
   return (
     <div>
-      <PageHeader title="Compliance archive" description="Every message sent or received, kept read-only until its retention date. All searches, views and exports are recorded in the audit log." />
-      <div className="grid gap-5 xl:grid-cols-3">
-        <div className="space-y-5 xl:col-span-2">
+      <div className="space-y-5">
+        <div className="space-y-5">
           <Card title="Search">
             <form
               className="grid gap-3 sm:grid-cols-3"
@@ -364,7 +536,7 @@ export function ArchivePage() {
                 <>
                   <Table head={['', 'Date', 'From', 'To', 'Subject', 'Size']}>
                     {res.data.items.map((h) => (
-                      <tr key={h.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpen(h.id)}>
+                      <tr key={h.id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpen(h.id)}>
                         <Td>
                           <Badge color={DIR[h.direction]?.color}>{DIR[h.direction]?.label}</Badge>
                           {h.legalHold ? (
@@ -398,12 +570,7 @@ export function ArchivePage() {
             </Card>
           )}
         </div>
-        <div className="space-y-5">
-          <PolicyCard />
-          <RetentionCard />
-        </div>
       </div>
-      {open !== null && <Viewer id={open} onClose={() => setOpen(null)} onChanged={res.reload} />}
     </div>
   );
 }

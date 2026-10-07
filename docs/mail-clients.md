@@ -63,4 +63,20 @@ The server is on the office LAN. Outside the office, phones reach it only throug
 
 ## Webmail
 
-Any browser: `https://mail.company.local`. Sign in with the e-mail address and LAN password. Webmail shows new mail instantly. It has search, plus rules and an out-of-office reply under *Rules & out of office*.
+Any browser: `https://mail.company.local`. Sign in with the e-mail address and LAN password. Webmail shows new mail instantly and works much like Outlook.
+
+### Folders
+
+- **New folder:** click *+ New folder*. Hover over a folder and click **+** to make a subfolder inside it.
+- **Moving mail:** drag messages onto a folder (select several first to move them together), or use *Move to…*.
+- **Same folders everywhere:** folders are kept on the server, so a folder made in webmail appears in Outlook, Thunderbird and on phones at their next *Send/Receive*, and the other way round. Nothing has to be set up again on a new PC. If a folder does not appear in Outlook, right-click the account, choose *IMAP Folders…* and click *Query*.
+
+### Rules ("Always move messages from this sender")
+
+- **From a message:** open a message and click **Always move from sender…**. Choose a folder (or type a new one) and, if you like, move the mail from that sender already in the folder. New mail from them goes straight into that folder.
+- **Your rules:** see and change all your rules under *Rules & out of office*. There you can sort by sender, subject, words, attachments and more, and use **Run now** to apply a rule to the mail already in your Inbox.
+- **Server rules vs Outlook rules:** these rules run on the server, so they work everywhere: webmail, Outlook and phones, even when your PC is off. Rules you make inside Outlook's own *Rules* menu only run in that copy of Outlook while it is open. For rules that should always apply, make them in webmail.
+
+### Deleting mail
+
+Deleting mail from your mailbox does not delete it from the company archive. The archive keeps every message you send and receive for the retention period your company sets.

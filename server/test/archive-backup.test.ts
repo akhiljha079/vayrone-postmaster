@@ -72,6 +72,25 @@ describe.skipIf(!dbConfig())('archive and backup admin APIs', () => {
     expect(Number(ex!.n)).toBeGreaterThanOrEqual(2);
   });
 
+  it('mailbox view: one folder per address with Received and Sent; ZIP keeps that structure', async () => {
+    // Alice also sent something (archived as sent by her).
+    const sent = await ctx.store.ingest(Buffer.from(`From: alice@${domain}\r\nTo: buyer@outside.test\r\nSubject: Purchase order 12\r\nMessage-ID: <po12@${domain}>\r\n\r\nPO attached\r\n`));
+    await ctx.mailflow.archiver!.archive({ messageId: sent.id, size: sent.size, subject: 'Purchase order 12', date: new Date(), direction: 'out', envelopeFrom: `alice@${domain}`, envelopeTo: ['buyer@outside.test'], recipientUserIds: [], senderUserIds: [alice] });
+    const list = (await auditor.get(`/api/admin/archive/mailboxes?q=alice@${domain}`)).json();
+    expect(list.items).toEqual([expect.objectContaining({ userId: alice, address: `alice@${domain}`, deleted: false, received: 2, sent: 1 })]);
+    const inSent = (await auditor.get(`/api/admin/archive/search?userId=${alice}&role=sent`)).json();
+    expect(inSent.items.map((i: { subject: string }) => i.subject)).toEqual(['Purchase order 12']);
+    const inReceived = (await auditor.get(`/api/admin/archive/search?userId=${alice}&role=received`)).json();
+    expect(inReceived.total).toBe(2);
+
+    const zip = await auditor.post('/api/admin/archive/export', { format: 'eml_zip', layout: 'mailboxes', userIds: [alice] });
+    expect(zip.headers['content-disposition']).toContain(`archive-alice@${domain}-`);
+    const names = zip.rawPayload.toString('latin1');
+    expect(names).toMatch(new RegExp(`alice@${domain.replace(/\./g, '\\.')}/Received/\\d{4}-\\d\\d-\\d\\d \\d{4} - Quotation for steel pipes \\[\\d+\\]\\.eml`));
+    expect(names).toContain(`alice@${domain}/Sent/`);
+    expect(names).toContain('Purchase order 12');
+  });
+
   it('admins restore archived mail into a mailbox; super admins set legal hold', async () => {
     const id = (await boss.get('/api/admin/archive/search?q=lunch')).json().items[0].id;
     expect((await deputy.post(`/api/admin/archive/items/${id}/restore`, { userId: alice })).json()).toEqual({ ok: true, folder: 'Restored from archive' });

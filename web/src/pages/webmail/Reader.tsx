@@ -52,7 +52,7 @@ export function MailFrame({ html, images }: { html: string; images: boolean }) {
   );
 }
 
-export type ReaderAction = 'reply' | 'replyAll' | 'forward' | 'editDraft' | 'delete' | 'unread' | 'flag' | 'unflag' | 'junk' | 'not_junk' | { move: number };
+export type ReaderAction = 'reply' | 'replyAll' | 'forward' | 'editDraft' | 'delete' | 'unread' | 'flag' | 'unflag' | 'junk' | 'not_junk' | 'ruleFromSender' | { move: number };
 
 export function Reader({ id, folders, onAction, onBack }: { id: number; folders: Folder[]; onAction: (a: ReaderAction, m: FullMessage) => void; onBack: () => void }) {
   const [images, setImages] = useState(false);
@@ -117,6 +117,11 @@ export function Reader({ id, folders, onAction, onBack }: { id: number; folders:
               </option>
             ))}
         </Select>
+        {m.from[0]?.address && (
+          <Button variant="ghost" onClick={() => onAction('ruleFromSender', m)} title="Create a rule: mail from this sender goes to a folder">
+            Always move from sender…
+          </Button>
+        )}
         <a className="ml-auto rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-100" href={`/api/mail/messages/${m.id}/raw`}>
           Download .eml
         </a>

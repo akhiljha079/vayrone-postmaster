@@ -342,10 +342,10 @@ export class MailFlow {
     }
   }
 
-  private async archive(m: StoredMessage, direction: Direction, envelopeFrom: string, envelopeTo: string[], userIds: number[]): Promise<void> {
+  private async archive(m: StoredMessage, direction: Direction, envelopeFrom: string, envelopeTo: string[], recipientUserIds: number[], senderUserIds: number[]): Promise<void> {
     if (!this.archiver) return;
     try {
-      await this.archiver.archive({ messageId: m.id, size: m.size, subject: m.parsed.subject, date: m.parsed.date, direction, envelopeFrom, envelopeTo, userIds });
+      await this.archiver.archive({ messageId: m.id, size: m.size, subject: m.parsed.subject, date: m.parsed.date, direction, envelopeFrom, envelopeTo, recipientUserIds, senderUserIds });
     } catch (err) {
       this.log.error({ err }, 'archiving failed');
     }
@@ -456,7 +456,7 @@ export class MailFlow {
 
     if (!r.skipJournal && delivered.length) {
       const logins = await rows<{ login: string }>(this.db, 'SELECT login FROM users WHERE id IN (?)', [delivered]);
-      await this.archive(m, r.direction, r.envelopeFrom, logins.map((l) => l.login), [...delivered, ...(r.senderUserId ? [r.senderUserId] : [])]);
+      await this.archive(m, r.direction, r.envelopeFrom, logins.map((l) => l.login), delivered, r.senderUserId ? [r.senderUserId] : []);
       await this.journal({
         message: m,
         direction: r.direction,
@@ -592,7 +592,7 @@ export class MailFlow {
     const delivered = outcomes.filter((o) => o.status === 'delivered').map((o) => o.userId);
     if (r.external.length || delivered.length) {
       const logins = delivered.length ? (await rows<{ login: string }>(this.db, 'SELECT login FROM users WHERE id IN (?)', [delivered])).map((l) => l.login) : [];
-      await this.archive(r.message, r.external.length ? 'out' : 'internal', r.envelopeFrom, [...r.external, ...logins], [r.senderUserId, ...delivered]);
+      await this.archive(r.message, r.external.length ? 'out' : 'internal', r.envelopeFrom, [...r.external, ...logins], delivered, [r.senderUserId]);
       await this.journal({
         message: r.message,
         direction: r.external.length ? 'out' : 'internal',

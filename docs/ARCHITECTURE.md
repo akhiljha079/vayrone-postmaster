@@ -254,6 +254,8 @@ LAN submission: outbound company rules first (reject → SMTP 550 to Outlook,
   - **Retention:** the longest matching retention policy wins (all/domain/group/user); the default is 7 years. Legal hold blocks deletion.
   - **Access:** nobody can edit or delete archive items. Admins and auditors search, view and export; admins can copy a message back into a mailbox. Every search, view, download and export is audit-logged.
   - **License:** the archive needs the license feature `archive`.
+  - **Mailbox layout (Phase 12, migration 010):** `archive_item_users` records each local user's `role` (`received` or `sent`) and their `address` at archive time. The admin *Mailboxes* view and the `layout: 'mailboxes'` export (`exportArchiveTree`) present the archive as `<address>/Received` and `<address>/Sent`. This is a fixed layout, independent of users' own folders, and it survives renamed or deleted accounts. Deleting mail, folders or the user never touches archive rows; only retention does.
+- **Personal rules from webmail (Phase 12):** "Always move from sender" creates an ordinary personal rule. *Run now* (`POST /api/mail/rules/:id/run`) applies only the organising actions (move, copy, flag, mark read) to the newest 5,000 messages of a folder; forwards and replies are never sent for old mail. Folders made in webmail are subscribed by default, so IMAP clients (Outlook, Thunderbird, phones) list them at their next sync.
 - **Full-text search:** the worker indexes new messages into `message_search` (InnoDB FULLTEXT) in the background. It covers:
   - decoded body text, up to 1 MiB per message;
   - attachment names;

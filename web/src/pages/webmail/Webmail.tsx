@@ -4,12 +4,16 @@ import { useAuth } from '../../auth';
 import { Button, ErrorBanner, Input, Spinner, useConfirm } from '../../components/ui';
 import { Compose, draftInit, forwardInit, replyInit, type ComposeInit } from './Compose';
 import { Reader, type ReaderAction } from './Reader';
+import { SenderRule } from './SenderRule';
 import { FOLDER_ICON, displayName, folderName, shortDate, useMailSocket, type Folder, type ListItem } from './types';
 
 interface FolderResp {
   folders: Folder[];
   quota: { used: number; limit: number | null };
 }
+/** Drag-and-drop payload: webmail message ids being moved to a folder. */
+const DRAG_TYPE = 'application/x-vpm-messages';
+
 interface ListResp {
   items: ListItem[];
   nextBefore: number | null;
@@ -21,6 +25,7 @@ function FolderPane({
   onSelect,
   onCompose,
   onChanged,
+  onDropMessages,
   live,
 }: {
   data: FolderResp | null;
@@ -28,9 +33,18 @@ function FolderPane({
   onSelect: (id: number) => void;
   onCompose: () => void;
   onChanged: () => void;
+  onDropMessages: (ids: number[], folderId: number) => void;
   live: boolean;
 }) {
   const [ask, confirmNode] = useConfirm();
+  const [dropOn, setDropOn] = useState<number | null>(null);
+  const newSubfolder = async (parent: string) => {
+    const name = window.prompt(`New folder inside "${parent}"`);
+    if (name?.trim()) {
+      await post('/api/mail/folders', { path: `${parent}/${name.trim().replace(/\//g, '-')}` });
+      onChanged();
+    }
+  };
   const newFolder = async () => {
     const name = window.prompt('Folder name (use / for a subfolder, e.g. Clients/Sharma)');
     if (name?.trim()) {
@@ -53,7 +67,20 @@ function FolderPane({
           <div key={f.id} className="group flex items-center">
             <button
               onClick={() => onSelect(f.id)}
-              className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${current === f.id ? 'bg-brand-50 font-medium text-brand-900' : 'text-slate-700 hover:bg-slate-50'}`}
+              onDragOver={(e) => {
+                if (f.id === current || !e.dataTransfer.types.includes(DRAG_TYPE)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setDropOn(f.id);
+              }}
+              onDragLeave={() => setDropOn((d) => (d === f.id ? null : d))}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDropOn(null);
+                const ids = JSON.parse(e.dataTransfer.getData(DRAG_TYPE) || '[]') as number[];
+                if (ids.length) onDropMessages(ids, f.id);
+              }}
+              className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${dropOn === f.id ? 'bg-brand-100 ring-2 ring-brand-500' : current === f.id ? 'bg-brand-50 font-medium text-brand-900' : 'text-slate-700 hover:bg-slate-50'}`}
             >
               <span aria-hidden className="w-4 text-center">
                 {FOLDER_ICON[f.specialUse ?? ''] ?? '📁'}
@@ -66,6 +93,9 @@ function FolderPane({
             </button>
             {!f.specialUse && (
               <span className="hidden gap-0.5 group-hover:flex">
+                <button className="rounded px-1 text-xs text-slate-400 hover:text-slate-700" title="New subfolder" onClick={() => void newSubfolder(f.path)}>
+                  +
+                </button>
                 <button
                   className="rounded px-1 text-xs text-slate-400 hover:text-slate-700"
                   title="Rename"
@@ -121,10 +151,22 @@ function FolderPane({
   );
 }
 
-function Row({ m, active, checked, onOpen, onCheck, sentView }: { m: ListItem; active: boolean; checked: boolean; onOpen: () => void; onCheck: (v: boolean) => void; sentView: boolean }) {
+function Row({ m, active, checked, onOpen, onCheck, sentView, dragIds }: { m: ListItem; active: boolean; checked: boolean; onOpen: () => void; onCheck: (v: boolean) => void; sentView: boolean; dragIds: () => number[] }) {
   return (
     <li
       onClick={onOpen}
+      draggable
+      onDragStart={(e) => {
+        const ids = dragIds();
+        e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(ids));
+        e.dataTransfer.effectAllowed = 'move';
+        const ghost = document.createElement('div');
+        ghost.textContent = ids.length > 1 ? `${ids.length} messages` : m.subject || '(no subject)';
+        ghost.className = 'fixed -top-10 rounded bg-slate-900 px-2 py-1 text-xs text-white';
+        document.body.appendChild(ghost);
+        e.dataTransfer.setDragImage(ghost, 0, 0);
+        setTimeout(() => ghost.remove(), 0);
+      }}
       className={`flex cursor-pointer gap-2 border-b border-slate-100 px-3 py-2 ${active ? 'bg-brand-50' : checked ? 'bg-slate-50' : 'hover:bg-slate-50'} ${m.seen ? '' : 'border-l-2 border-l-brand-600'}`}
     >
       <input type="checkbox" checked={checked} onClick={(e) => e.stopPropagation()} onChange={(e) => onCheck(e.target.checked)} className="mt-1" aria-label="Select message" />
@@ -168,6 +210,7 @@ export function Webmail() {
   const [compose, setCompose] = useState<ComposeInit | null>(null);
   const [identities, setIdentities] = useState<{ displayName: string; addresses: string[] }>({ displayName: '', addresses: [] });
   const [toast, setToast] = useState<string | null>(null);
+  const [senderRule, setSenderRule] = useState<string | null>(null);
   const lastInboxUnseen = useRef<number | null>(null);
 
   const folder = folders?.folders.find((f) => f.id === current) ?? null;
@@ -278,6 +321,7 @@ export function Webmail() {
     if (a === 'reply' || a === 'replyAll') return setCompose(replyInit(m, identities.addresses, a === 'replyAll'));
     if (a === 'forward') return setCompose(forwardInit(m));
     if (a === 'editDraft') return setCompose(draftInit(m));
+    if (a === 'ruleFromSender') return setSenderRule(m.from[0]?.address ?? null);
     if (typeof a === 'object') return void act('move', [m.id], a.move);
     if (a === 'unread') {
       void act('unread', [m.id]);
@@ -310,7 +354,7 @@ export function Webmail() {
   return (
     <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
       <div className="hidden md:flex">
-        <FolderPane data={folders} current={current} onSelect={(id) => (setCurrent(id), setQ(''), setQuery(''))} onCompose={() => setCompose({})} onChanged={() => void loadFolders()} live={live} />
+        <FolderPane data={folders} current={current} onSelect={(id) => (setCurrent(id), setQ(''), setQuery(''))} onCompose={() => setCompose({})} onChanged={() => void loadFolders()} onDropMessages={(ids, folderId) => void act('move', ids, folderId)} live={live} />
       </div>
       <section className={`flex min-w-0 flex-col border-r border-slate-200 bg-white md:w-[24rem] lg:w-[28rem] ${open ? 'hidden md:flex' : 'flex w-full'}`}>
         <div className="space-y-2 border-b border-slate-200 p-2">
@@ -409,6 +453,7 @@ export function Webmail() {
               active={open === m.id}
               checked={selected.has(m.id)}
               sentView={folder?.specialUse === 'sent' || folder?.specialUse === 'drafts'}
+              dragIds={() => (selected.has(m.id) ? [...selected] : [m.id])}
               onOpen={() => {
                 setOpen(m.id);
                 if (!m.seen) setItems((old) => old.map((x) => (x.id === m.id ? { ...x, seen: true } : x)));
@@ -458,6 +503,20 @@ export function Webmail() {
             setToast(msg);
             void loadFolders();
             void loadList(false);
+          }}
+        />
+      )}
+      {senderRule && current && (
+        <SenderRule
+          sender={senderRule}
+          folders={folders?.folders ?? []}
+          currentFolderId={current}
+          onClose={() => setSenderRule(null)}
+          onDone={(msg) => {
+            setSenderRule(null);
+            setToast(msg);
+            void loadFolders();
+            void loadList(true);
           }}
         />
       )}

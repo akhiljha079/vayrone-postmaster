@@ -327,6 +327,14 @@ export function RuleList({ base, userId, allowOutbound, title, description }: { 
   const [editing, setEditing] = useState<Rule | 'new' | null>(null);
   const [dragId, setDragId] = useState<number | null>(null);
   const [ask, confirmNode] = useConfirm();
+  const [ran, setRan] = useState<string | null>(null);
+  /** Personal rules only: apply to mail already in the Inbox (Outlook's "Run Rules Now"). */
+  const canRun = base === '/api/mail';
+  const runNow = useAction(async (r: Rule) => {
+    const res = await post<{ checked: number; matched: number; moved: number }>(`${base}/rules/${r.id}/run`, {});
+    setRan(`"${r.name}": checked ${res.checked} message(s) in the Inbox, ${res.matched} matched, ${res.moved} moved.`);
+    list.reload();
+  });
   const saveOrder = useAction(async (ids: number[]) => {
     await put(`${base}/rules-order${query}`, { ids });
     list.reload();
@@ -347,7 +355,8 @@ export function RuleList({ base, userId, allowOutbound, title, description }: { 
     <Card title={title} actions={<Button onClick={() => setEditing('new')}>New rule</Button>}>
       {confirmNode}
       {description && <p className="mb-3 text-sm text-slate-600">{description}</p>}
-      <ErrorBanner error={list.error ?? saveOrder.error} />
+      <ErrorBanner error={list.error ?? saveOrder.error ?? runNow.error} />
+      {ran && <p className="mb-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{ran}</p>}
       {list.loading && !list.data ? (
         <Spinner />
       ) : !order.length ? (
@@ -382,6 +391,11 @@ export function RuleList({ base, userId, allowOutbound, title, description }: { 
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Toggle checked={r.isEnabled} onChange={(v) => void post(`${base}/rules/${r.id}/enabled${query}`, { enabled: v }).then(list.reload)} label="" />
+                {canRun && r.isEnabled && (
+                  <Button variant="ghost" busy={runNow.busy} onClick={() => void runNow.run(r)} title="Apply this rule to the mail already in your Inbox">
+                    Run now
+                  </Button>
+                )}
                 <Button variant="ghost" onClick={() => setEditing(r)}>
                   Edit
                 </Button>

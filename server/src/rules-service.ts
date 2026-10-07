@@ -174,6 +174,61 @@ export async function testRule(ctx: CoreContext, input: unknown) {
   return { matched: plan.matched.length > 0, conditions, plan };
 }
 
+/**
+ * "Run now" (Outlook's Run Rules Now): applies one personal rule to mail already in a
+ * folder. Only the organising actions run (move, copy, flag, mark as read); replies and
+ * forwards are never sent for old mail.
+ */
+export async function runRuleOnFolder(ctx: CoreContext, s: RuleScope & { scope: 'user' }, id: number, folderId: number): Promise<{ checked: number; matched: number; moved: number }> {
+  const r = await ruleInScope(ctx, id, s);
+  const folder = await one<{ id: number }>(ctx.db, 'SELECT id FROM folders WHERE id = ? AND user_id = ?', [folderId, s.userId]);
+  if (!folder) throw notFound('Folder not found');
+  const rule: StoredRule = {
+    id,
+    scope: 'user',
+    name: String(r.name),
+    stage: 'inbound',
+    match_mode: r.match_mode as StoredRule['match_mode'],
+    conditions: json(r.conditions) ?? [],
+    actions: (json<StoredRule['actions']>(r.actions) ?? []).filter((a) => ['move', 'copy', 'flag', 'mark_read', 'stop'].includes(a.type)),
+    stop_processing: 0,
+  };
+  const tz = (await mailPolicy(ctx)).timezone;
+  const items = await rows<{ uid: number; storage_path: string; codec: number }>(
+    ctx.db,
+    'SELECT i.uid, m.storage_path, m.codec FROM mail_items i JOIN messages m ON m.id = i.message_id WHERE i.folder_id = ? ORDER BY i.uid DESC LIMIT 5000',
+    [folderId],
+  );
+  const moves = new Map<string, number[]>();
+  const copies = new Map<string, number[]>();
+  const flags = new Map<number, number[]>();
+  let matched = 0;
+  for (const it of items) {
+    const raw = await ctx.store.loadRaw(it);
+    const plan = planDelivery([rule], new RuleMessage(parseMime(raw), raw, 'in', ''), tz, 'inbound');
+    if (!plan.matched.length) continue;
+    matched++;
+    if (plan.flags) flags.set(plan.flags, [...(flags.get(plan.flags) ?? []), it.uid]);
+    for (const c of plan.copies) copies.set(c, [...(copies.get(c) ?? []), it.uid]);
+    if (plan.folder) moves.set(plan.folder, [...(moves.get(plan.folder) ?? []), it.uid]);
+  }
+  const target = async (path: string) => (await ctx.store.getFolder(s.userId, path)) ?? (await ctx.store.createFolder(s.userId, path));
+  for (const [f, uids] of flags) await ctx.store.storeFlags(folderId, uids, 'add', f, null);
+  for (const [path, uids] of copies) {
+    const dst = await target(path);
+    if (dst.id !== folderId) await ctx.store.copy(folderId, uids, dst.id);
+  }
+  let moved = 0;
+  for (const [path, uids] of moves) {
+    const dst = await target(path);
+    if (dst.id === folderId) continue;
+    await ctx.store.move(folderId, uids, dst.id);
+    moved += uids.length;
+  }
+  if (matched) await exec(ctx.db, 'UPDATE mail_rules SET hit_count = hit_count + ?, last_hit_at = ? WHERE id = ?', [matched, new Date(), id]);
+  return { checked: items.length, matched, moved };
+}
+
 // ---------------------------------------------------------------- forwarding / out of office
 
 export const ForwardingBody = z.object({

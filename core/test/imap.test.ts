@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ImapFlow } from 'imapflow';
 import nodemailer from 'nodemailer';
+import { one } from '../src/db.js';
 import { dbConfig, makeUser, startCore, uniqueDomain, type TestCore } from './helpers.js';
 import { complexMessage, simpleMessage } from './fixtures.js';
 
@@ -41,6 +42,36 @@ describe.skipIf(!dbConfig())('IMAP server (imapflow client)', () => {
     const list = await client.list();
     const byPath = Object.fromEntries(list.map((m) => [m.path, m.specialUse ?? null]));
     expect(byPath).toMatchObject({ INBOX: '\\Inbox', Sent: '\\Sent', Drafts: '\\Drafts', Trash: '\\Trash', Junk: '\\Junk', Archive: '\\Archive' });
+  });
+
+  it('folders made in webmail (also nested) appear in Outlook-style clients, subscribed, with the mail rules put there', async () => {
+    const userId = (await one<{ id: number }>(core.ctx.db, 'SELECT id FROM users WHERE login = ?', [user]))!.id;
+    // What POST /api/mail/folders does.
+    await core.ctx.store.createFolder(userId, 'Clients/Sharma Steel');
+    // Mail that a rule files into it.
+    const message = await core.ctx.store.ingest(Buffer.from(simpleMessage({ subject: 'Order from Sharma' })));
+    const f = (await core.ctx.store.getFolder(userId, 'Clients/Sharma Steel'))!;
+    await core.ctx.store.append({ userId, folderId: f.id, message, origin: 'fetch' });
+
+    const outlook = newClient();
+    await outlook.connect();
+    try {
+      const all = (await outlook.list()).map((m) => m.path);
+      expect(all).toEqual(expect.arrayContaining(['Clients', 'Clients/Sharma Steel']));
+      // Outlook and Thunderbird show subscribed folders (LSUB / LIST (SUBSCRIBED)).
+      const subscribed = (await outlook.list({ statusQuery: { messages: true } })).filter((m) => m.subscribed).map((m) => m.path);
+      expect(subscribed).toContain('Clients/Sharma Steel');
+      const lock = await outlook.getMailboxLock('Clients/Sharma Steel');
+      try {
+        const subjects: string[] = [];
+        for await (const msg of outlook.fetch('1:*', { envelope: true })) subjects.push(msg.envelope?.subject ?? '');
+        expect(subjects).toEqual(['Order from Sharma']);
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await outlook.logout().catch(() => {});
+    }
   });
 
   it('rejects a wrong password', async () => {

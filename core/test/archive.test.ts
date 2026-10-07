@@ -58,6 +58,34 @@ describe.skipIf(!dbConfig())('compliance archive, search index and maintenance',
     expect(rcpts).toEqual(['buyer@outside.test', `bob@${domain}`]);
     const users = (await rows<{ user_id: number }>(core.ctx.db, 'SELECT user_id FROM archive_item_users WHERE archive_id = ?', [a!.id])).map((u) => u.user_id).sort();
     expect(users).toEqual([alice, bob].sort((x, y) => x - y));
+    // Mailbox folders: Alice's "Sent", Bob's "Received", each under the address at the time.
+    const links = await rows<{ user_id: number; role: string; address: string }>(core.ctx.db, 'SELECT user_id, role, address FROM archive_item_users WHERE archive_id = ? ORDER BY role', [a!.id]);
+    expect(links).toEqual([
+      { user_id: bob, role: 'received', address: `bob@${domain}` },
+      { user_id: alice, role: 'sent', address: `alice@${domain}` },
+    ]);
+  });
+
+  it('keeps archived mail after the user deletes it, empties Trash, and after the account is deleted', async () => {
+    const carol = await makeUser(core.ctx, `carol@${domain}`, PW);
+    const message = await core.ctx.store.ingest(Buffer.from(simpleMessage({ subject: 'Contract signed' })));
+    await core.ctx.mailflow.inbound({ message, recipients: [{ userId: carol }], origin: 'fetch', direction: 'in', envelopeFrom: 'client@outside.test' });
+    const a = await one<{ id: number }>(core.ctx.db, 'SELECT id FROM archive_items WHERE message_id = ?', [message.id]);
+    expect(a).toBeDefined();
+    // The user deletes it for good (flag \Deleted + expunge, like Outlook emptying Trash).
+    const inbox = (await core.ctx.store.getFolder(carol, 'INBOX'))!;
+    const item = await one<{ uid: number }>(core.ctx.db, 'SELECT uid FROM mail_items WHERE folder_id = ? AND message_id = ?', [inbox.id, message.id]);
+    await core.ctx.store.storeFlags(inbox.id, [item!.uid], 'add', 8, null);
+    await core.ctx.store.expunge(inbox.id);
+    expect(await one(core.ctx.db, 'SELECT id FROM mail_items WHERE user_id = ? AND message_id = ?', [carol, message.id])).toBeUndefined();
+    // Then the account itself is deleted (same statements as Admin > Users > Delete).
+    await exec(core.ctx.db, 'DELETE FROM users WHERE id = ?', [carol]);
+    await collectGarbage(core.ctx.db, core.ctx.blobs, 0);
+    // The archive still has the message, under the address it was received at.
+    const kept = await one<{ storage_path: string; codec: number; refcount: number }>(core.ctx.db, 'SELECT storage_path, codec, refcount FROM messages WHERE id = ?', [message.id]);
+    expect(kept!.refcount).toBeGreaterThanOrEqual(1);
+    expect((await core.ctx.blobs.get(kept!.storage_path, kept!.codec)).toString()).toContain('Contract signed');
+    expect(await one(core.ctx.db, 'SELECT role, address FROM archive_item_users WHERE archive_id = ?', [a!.id])).toEqual({ role: 'received', address: `carol@${domain}` });
   });
 
   it('retention policies: longest matching wins; disabled archive stores nothing', async () => {

@@ -240,6 +240,30 @@ describe.skipIf(!dbConfig())('webmail API', () => {
     expect((await alice.del(`/api/mail/folders/${(await folderOf(aliceId, 'sent')).id}`)).statusCode).toBe(400);
     expect((await alice.del(`/api/mail/folders/${f.id}`)).statusCode).toBe(200);
   });
+
+  it('"Always move from sender" and Run now: a rule files new and existing mail into a folder', async () => {
+    const vendorMail = (subject: string) => `From: Sharma Steel <orders@sharma.test>\r\nTo: ${A}\r\nSubject: ${subject}\r\nMessage-ID: <${randomBytes(6).toString('hex')}@sharma.test>\r\n\r\nPlease confirm.\r\n`;
+    await deliver(aliceId, vendorMail('PO 1'));
+    await deliver(aliceId, vendorMail('PO 2'));
+    await deliver(aliceId, `From: other@else.test\r\nTo: ${A}\r\nSubject: Unrelated\r\nMessage-ID: <${randomBytes(6).toString('hex')}@else.test>\r\n\r\nhi\r\n`);
+    // What the webmail dialog does: folder, rule, run on the Inbox.
+    expect((await alice.post('/api/mail/folders', { path: 'Clients/Sharma' })).statusCode).toBe(200);
+    const rule = (await alice.post('/api/mail/rules', { name: 'From orders@sharma.test', stage: 'inbound', conditions: [{ field: 'from', op: 'contains', value: 'orders@sharma.test' }], actions: [{ type: 'move', folder: 'Clients/Sharma' }], stopProcessing: true })).json();
+    const inbox = await inboxOf(aliceId);
+    const run = (await alice.post(`/api/mail/rules/${rule.id}/run`, { folderId: inbox.id })).json();
+    expect(run).toMatchObject({ matched: 2, moved: 2 });
+    const sharma = (await ctx.store.getFolder(aliceId, 'Clients/Sharma'))!;
+    const subjects = async (folderId: number) => (await rows<{ s: string }>(ctx.db, 'SELECT m.hdr_subject s FROM mail_items i JOIN messages m ON m.id = i.message_id WHERE i.folder_id = ? ORDER BY s', [folderId])).map((r) => r.s);
+    expect(await subjects(sharma.id)).toEqual(['PO 1', 'PO 2']);
+    expect(await subjects(inbox.id)).toContain('Unrelated');
+    // New mail from that sender goes straight to the folder.
+    await deliver(aliceId, vendorMail('PO 3'));
+    expect(await subjects(sharma.id)).toEqual(['PO 1', 'PO 2', 'PO 3']);
+    // Someone else's rule cannot be run.
+    const bob = new Client(app);
+    await bob.login(B, PW);
+    expect((await bob.post(`/api/mail/rules/${rule.id}/run`, {})).statusCode).toBe(404);
+  });
 });
 
 describe.skipIf(!dbConfig())('realtime push to browsers', () => {
@@ -294,4 +318,5 @@ describe.skipIf(!dbConfig())('realtime push to browsers', () => {
     expect(Date.now() - t0).toBeLessThan(1500);
     s.close();
   });
+
 });

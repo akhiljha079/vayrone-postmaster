@@ -54,7 +54,7 @@ export { openRemote, isRemoteKind } from './backup/remote.js';
 export type { S3Config, FtpConfig, RemoteStore } from './backup/remote.js';
 export { enqueueJob, jobStatus } from './jobs.js';
 export type { EnqueueOptions } from './jobs.js';
-export { exportMessages, toMboxEntry, EXPORT_LIMIT } from './archive/export.js';
+export { exportMessages, exportArchiveTree, toMboxEntry, EXPORT_LIMIT, ARCHIVE_TREE_LIMIT, type ArchiveTreeEntry } from './archive/export.js';
 export { tableRows as readBackupTable } from './backup/restore.js';
 export * from './control.js';
 export * from './install.js';

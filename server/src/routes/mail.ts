@@ -12,6 +12,7 @@ import {
   listRules,
   mailPolicy,
   reorderRules,
+  runRuleOnFolder,
   setAutoReply,
   setForwarding,
   setRuleEnabled,
@@ -50,6 +51,13 @@ export function mailRoutes(ctx: CoreContext) {
     app.put('/rules-order', { preHandler: mailbox }, async (req) => {
       await reorderRules(ctx, own(req), z.object({ ids: z.array(Id).max(500) }).parse(req.body).ids);
       return { ok: true };
+    });
+    /** Applies the rule to mail already in a folder (default: Inbox). */
+    app.post<{ Params: { id: string } }>('/rules/:id/run', { preHandler: mailbox, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+      const s = own(req) as RuleScope & { scope: 'user' };
+      const b = z.object({ folderId: Id.optional() }).parse(req.body ?? {});
+      const folderId = b.folderId ?? (await ctx.store.getSpecialFolder(s.userId, 'inbox'))!.id;
+      return runRuleOnFolder(ctx, s, Id.parse(req.params.id), folderId);
     });
     app.post('/rules/test', { preHandler: mailbox }, async (req) => {
       own(req);

@@ -77,9 +77,22 @@ Use **Test** to check a connection before saving. The list shows each account's 
 
 When the archive is enabled, every incoming and outgoing message is kept for the retention period (default 7 years), even if users delete it.
 
-- **Who can see it:** auditors and super admins can search by text, sender, recipient, date or direction, open messages, export (MBOX or EML zip) and restore a message into a mailbox. Every access is recorded in the audit log.
+- **Kept no matter what users do.** The archive keeps its own copy. Deleting a message, emptying Trash, deleting a folder or even deleting the user account does not remove it from the archive. Only the retention period (or a super admin's retention policy) does.
+- **Mailboxes tab:** the archive is organised as one folder per e-mail address. Each folder has:
+  - **Received:** all mail that address received;
+  - **Sent:** all mail it sent.
+
+  This layout is fixed: it does not follow the folders users make in their own mailboxes. A message between two colleagues appears in both people's folders. Deleted accounts stay listed under their address, marked *Deleted user*.
+- **Download:**
+  - *Download this mailbox* gives a ZIP laid out as `name@company.com/Received/…eml` and `name@company.com/Sent/…eml`.
+  - *Download all* gives every mailbox in the same layout.
+  - The `.eml` files open in Outlook, Thunderbird or any mail program.
+- **Search tab:** search by text, sender, recipient, date, direction or mailbox. You can export the results (MBOX or EML zip) or restore a message into a user's mailbox.
+- **Who can see it:** auditors and super admins. Every search, view and download is recorded in the audit log.
 - **Legal hold:** keeps a message beyond its retention period.
-- **Retention policies:** clean up mailbox folders automatically, for example empty Trash after 30 days.
+- **Retention & settings tab:** archive on/off, retention period, and policies that clean up mailbox folders automatically (for example, empty Trash after 30 days). Mailbox clean-up never touches the archive.
+
+**Limit:** the archive holds the mail that passes through PostMaster. If someone sends from a phone that is connected straight to the provider instead of to PostMaster, that message is not in their *Sent* archive folder.
 
 ## 8. Backups and restore
 
