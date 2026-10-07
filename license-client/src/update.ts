@@ -8,7 +8,7 @@
 // anything is installed and again by the root updater just before it is applied.
 import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, open, readdir, stat, chmod } from 'node:fs/promises';
+import { mkdir, open, readdir, rm, stat, chmod } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { PassThrough, Writable } from 'node:stream';
@@ -130,7 +130,6 @@ export async function writeUpdatePackage(
   const final = createWriteStream(outFile);
   final.write(Buffer.concat([MAGIC, len, manifest]));
   await pipeline(createReadStream(tmpData), final);
-  const { rm } = await import('node:fs/promises');
   await rm(tmpData);
   const h = createHash('sha256');
   await pipeline(createReadStream(outFile), new Writable({ write: (c: Buffer, _e, cb) => (h.update(c), cb()) }));

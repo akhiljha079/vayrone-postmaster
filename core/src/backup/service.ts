@@ -12,6 +12,7 @@ import { raiseAlert, resolveAlert } from '../alerts.js';
 import { readManifest, runBackup, verifyBackup } from './backup.js';
 import { decryptStream, encryptedSize, encryptStream, keyFromInfo, newEncryption, type EncryptionInfo } from './crypt.js';
 import { isRemoteKind, openRemote, type RemoteStore } from './remote.js';
+import { APP_VERSION } from '../migrate.js';
 
 export interface BackupTargetRow {
   id: number;
@@ -185,7 +186,7 @@ export async function performBackup(ctx: CoreContext, o: PerformBackupOptions): 
   const run = await exec(
     ctx.db,
     "INSERT INTO backup_runs (schedule_id, target_id, kind, status, started_at, app_version, schema_version) VALUES (?,?,?, 'running', ?, ?, ?)",
-    [o.scheduleId ?? null, t.id, o.kind, new Date(), (await import('../migrate.js')).APP_VERSION, Number(schema?.v ?? 0)],
+    [o.scheduleId ?? null, t.id, o.kind, new Date(), APP_VERSION, Number(schema?.v ?? 0)],
   );
   const runId = run.insertId;
   const alertKey = `backup.failed.${t.id}`;

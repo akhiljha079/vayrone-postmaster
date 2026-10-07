@@ -1,0 +1,8 @@
+Vayrone PostMaster 0.6.3
+
+Fixed
+- Reinstalling after uninstalling (mail and settings kept) left the database service missing,
+  so PostMaster could not start ("site can't be reached"). The installer now reconnects the
+  existing database automatically.
+- "Vayrone PostMaster status" failed with "A dynamic import callback was not specified".
+  The same problem would have affected backups and Admin > Updates on Windows; fixed everywhere.

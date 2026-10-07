@@ -1,6 +1,7 @@
 // Software updates: channel check, download or offline upload, verification,
 // install request (applied by the privileged updater), history.
-import { createWriteStream, existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import * as sea from 'node:sea';
 import { rename } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { basename, join } from 'node:path';
@@ -52,8 +53,7 @@ interface Staged {
 
 async function installFormat(): Promise<'sea' | 'node'> {
   try {
-    const sea = (await import('node:sea')) as { isSea?: () => boolean };
-    return sea.isSea?.() ? 'sea' : 'node';
+    return (sea as { isSea?: () => boolean }).isSea?.() ? 'sea' : 'node';
   } catch {
     return 'node';
   }
@@ -62,7 +62,7 @@ async function installFormat(): Promise<'sea' | 'node'> {
 async function sha256File(f: string): Promise<string> {
   const h = createHash('sha256');
   await pipeline(
-    (await import('node:fs')).createReadStream(f),
+    createReadStream(f),
     new Transform({
       transform(c: Buffer, _e, cb) {
         h.update(c);

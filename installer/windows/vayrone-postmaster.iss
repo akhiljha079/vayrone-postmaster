@@ -65,8 +65,9 @@ WelcomeLabel2=This installs Vayrone PostMaster {#AppVersion}, the LAN mail serve
 [Files]
 Source: "{#Root}\release\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "assets\vpm.ico"; DestDir: "{app}"; Flags: ignoreversion
-; MariaDB is installed with the first installation only; upgrades leave the database engine running.
-Source: "{#Root}\.cache\win\mariadb\*"; DestDir: "{app}\mariadb"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: not IsUpgrade
+; MariaDB is installed when its service does not exist yet (first installation, or reinstalling after an
+; uninstall that kept the data). Upgrades leave the running database engine alone.
+Source: "{#Root}\.cache\win\mariadb\*"; DestDir: "{app}\mariadb"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: NeedDbEngine
 Source: "{#Root}\.cache\win\WinSW-x64.exe"; DestDir: "{app}\service"; DestName: "VayronePostMaster.exe"; Flags: ignoreversion
 Source: "{#Root}\.cache\win\WinSW-x64.exe"; DestDir: "{app}\service"; DestName: "VayronePostMasterWorker.exe"; Flags: ignoreversion
 Source: "{#Root}\.cache\win\WinSW-x64.exe"; DestDir: "{app}\service"; DestName: "VayronePostMasterUpdater.exe"; Flags: ignoreversion
@@ -125,6 +126,7 @@ var
   DataPage: TInputDirWizardPage;
   PortPage: TInputQueryWizardPage;
   SetupUrlValue: String;
+  DbServiceAtStart: Boolean;
 
 function ConfigDir(): String;
 begin
@@ -139,6 +141,19 @@ end;
 function IsUpgrade(): Boolean;
 begin
   Result := FileExists(ConfigFile());
+end;
+
+function ServiceExists(const Name: String): Boolean;
+var
+  Code: Integer;
+begin
+  Result := Exec(ExpandConstant('{sys}\sc.exe'), 'query ' + Name, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
+{ The database engine files are needed unless its service is already installed and running. }
+function NeedDbEngine(): Boolean;
+begin
+  Result := not DbServiceAtStart;
 end;
 
 function DataDir(): String;
@@ -330,6 +345,23 @@ begin
   RegWriteStringValue(HKLM, 'Software\Vayrone\PostMaster', 'WebPort', WebPort());
 end;
 
+{ Reinstall after an uninstall: the configuration and mail data were kept, but the database
+  service was removed. Register the bundled MariaDB again on the existing database folder. }
+procedure RepairDatabaseService();
+var
+  MyIni: String;
+begin
+  MyIni := DataDir() + '\db\my.ini';
+  if not FileExists(MyIni) then
+    RaiseException('The existing configuration was found, but not its database (' + MyIni + '). Restore the data folder, or remove ' + ConfigDir() + ' for a new installation.');
+  WizardForm.StatusLabel.Caption := 'Reconnecting the existing database...';
+  if not RunHidden(ExpandConstant('{app}\mariadb\bin\mysqld.exe'), '--install VayronePostMasterDB --defaults-file="' + MyIni + '"', 'register db service') then
+    RaiseException('The database service could not be registered again. See the setup log.');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterDB start= auto DisplayName= "Vayrone PostMaster Database"', 'sc config db');
+  if not RunHidden(ExpandConstant('{sys}\net.exe'), 'start VayronePostMasterDB', 'start db') then
+    RaiseException('The database service did not start. See the setup log.');
+end;
+
 var
   WasUpgrade: Boolean;
 
@@ -337,6 +369,7 @@ function InitializeSetup(): Boolean;
 begin
   // Decided once: FirstInstall writes the config file, after which IsUpgrade() is true.
   WasUpgrade := IsUpgrade();
+  DbServiceAtStart := ServiceExists('VayronePostMasterDB');
   Result := True;
 end;
 
@@ -347,7 +380,8 @@ var
 begin
   if CurStep <> ssPostInstall then exit;
   App := ExpandConstant('{app}');
-  if not WasUpgrade then FirstInstall();
+  if not WasUpgrade then FirstInstall()
+  else if not DbServiceAtStart then RepairDatabaseService();
 
   WizardForm.StatusLabel.Caption := 'Installing services...';
   // "install" fails harmlessly when the service already exists (upgrades).

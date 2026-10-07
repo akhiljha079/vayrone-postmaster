@@ -1,6 +1,12 @@
 // vpm cli — technician commands. The admin panel (Phase 3) replaces most of
 // these for day-to-day use; they remain for setup, recovery and support.
-import { readFileSync, writeFileSync } from 'node:fs';
+// No dynamic import() anywhere: the Windows/Linux executable runs V8 bytecode, which cannot load modules on demand.
+import { execFileSync } from 'node:child_process';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cp } from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { dirname as dn, join as j } from 'node:path';
 import { createLicensedContext, collectFingerprint, privilegedHwid, LicenseManager } from '@vpm/license-client';
 import { loadConfig } from './config.js';
 import { initInstall, setupCompleted } from './install.js';
@@ -124,7 +130,6 @@ async function status(d: CliDefaults): Promise<void> {
   }
   console.log(`Vayrone PostMaster status (${config.hostname})\n`);
   if (process.platform === 'win32') {
-    const { execFileSync } = await import('node:child_process');
     for (const [svc, what] of [
       ['VayronePostMasterDB', 'database'],
       ['VayronePostMaster', 'mail server and admin panel'],
@@ -151,7 +156,7 @@ async function status(d: CliDefaults): Promise<void> {
   if (dbOk) console.log(`OK       Database reachable`);
   const portPart = config.web.port === 443 && config.web.tls ? '' : `:${config.web.port}`;
   const url = `${config.web.tls ? 'https' : 'http'}://localhost${portPart}/`;
-  const { request } = await import(config.web.tls ? 'node:https' : 'node:http');
+  const request = config.web.tls ? httpsRequest : httpRequest;
   const webOk = await new Promise<boolean>((resolve) => {
     const r = request({ host: '127.0.0.1', port: config.web.port, path: '/api/health', rejectUnauthorized: false, timeout: 5000 }, (res: { statusCode?: number; resume(): void }) => {
       res.resume();
@@ -320,9 +325,6 @@ export async function runCli(argv: string[], d: CliDefaults = {}): Promise<void>
         const m = await materializeRun(ctx, t, dirName, { ...(typeof f.passphrase === 'string' ? { passphrase: f.passphrase } : {}) });
         try {
           // Copy the run and its base runs next to each other (restore-full follows the chain).
-          const { cp } = await import('node:fs/promises');
-          const { dirname: dn, join: j } = await import('node:path');
-          const { readdirSync } = await import('node:fs');
           for (const d of readdirSync(dn(m.dir))) await cp(j(dn(m.dir), d), j(folder, d), { recursive: true });
           console.log(`Downloaded to ${j(folder, dirName)}. Check it with: vpm cli verify "${j(folder, dirName)}"`);
         } finally {
