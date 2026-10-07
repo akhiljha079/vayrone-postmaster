@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { LsContext } from '../context.js';
 import { exec, one, rows } from '../db.js';
 import { hashPassword } from '../crypto.js';
-import { requireStaff } from '../auth.js';
+import { newApiKey, requireStaff } from '../auth.js';
 import { badRequest, notFound, parsePatch } from '../http.js';
 import { logEvent } from '../services/licensing.js';
 import { getSetting, NOTIFY_DEFAULTS, putSetting, type NotifySettings, type SmtpSettings, type WhatsAppSettings } from '../services/notify.js';
@@ -156,6 +156,32 @@ export function settingsRoutes(ctx: LsContext) {
       if (Object.keys(set).length) await exec(ctx.db, 'UPDATE staff_users SET ? WHERE id = ?', [set, u.id]);
       if (b.password || b.isEnabled === false) await exec(ctx.db, 'DELETE FROM sessions WHERE user_id = ?', [u.id]);
       await logEvent(ctx.db, { kind: 'staff_update', actor: actor(req), detail: { userId: u.id, fields: Object.keys(b).filter((k) => k !== 'password').concat(b.password ? ['password'] : []) } });
+      return { ok: true };
+    });
+
+    // ------------------------------------------------------------ API keys (website admin panel, other systems)
+    app.get('/api-keys', { preHandler: owner }, async () =>
+      rows(
+        ctx.db,
+        `SELECT k.id, k.name, k.prefix, k.created_at createdAt, k.last_used_at lastUsedAt, k.last_used_ip lastUsedIp, k.revoked_at revokedAt, u.name createdBy
+           FROM api_keys k JOIN staff_users u ON u.id = k.created_by ORDER BY k.revoked_at IS NOT NULL, k.id DESC`,
+      ),
+    );
+
+    /** The key is returned once; only its hash is stored. */
+    app.post('/api-keys', { preHandler: owner }, async (req) => {
+      const { name } = z.object({ name: z.string().trim().min(2).max(100) }).parse(req.body);
+      const k = newApiKey();
+      const r = await exec(ctx.db, 'INSERT INTO api_keys (name, prefix, key_hash, created_by, created_at) VALUES (?,?,?,?,?)', [name, k.prefix, k.hash, req.staff!.id, new Date()]);
+      await logEvent(ctx.db, { kind: 'api_key_create', actor: actor(req), detail: { id: r.insertId, name, prefix: k.prefix } });
+      return { id: r.insertId, name, prefix: k.prefix, key: k.key };
+    });
+
+    app.delete<{ Params: { id: string } }>('/api-keys/:id', { preHandler: owner }, async (req) => {
+      const k = await one<{ id: number; name: string }>(ctx.db, 'SELECT id, name FROM api_keys WHERE id = ? AND revoked_at IS NULL', [req.params.id]);
+      if (!k) throw notFound('API key not found');
+      await exec(ctx.db, 'UPDATE api_keys SET revoked_at = ? WHERE id = ?', [new Date(), k.id]);
+      await logEvent(ctx.db, { kind: 'api_key_revoke', actor: actor(req), detail: { id: k.id, name: k.name } });
       return { ok: true };
     });
   };

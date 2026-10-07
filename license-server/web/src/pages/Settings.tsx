@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { get, patch, post, put, when } from '../api';
-import { Badge, Button, Card, ErrorBanner, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Textarea, Toggle, generatePassword, useAction, useResource } from '../ui';
+import { api, get, patch, post, put, when } from '../api';
+import { Badge, Button, Card, Empty, ErrorBanner, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Textarea, Toggle, generatePassword, useAction, useResource } from '../ui';
 
 interface Settings {
   smtp: { host: string; port: number; secure: boolean; user: string | null; from: string; passwordSet: boolean } | null;
@@ -31,6 +31,7 @@ export function SettingsPage() {
         </Card>
       </div>
       <Logins />
+      <ApiKeys />
       <ReminderLog />
     </>
   );
@@ -337,6 +338,99 @@ function ReminderLog() {
           </tr>
         ))}
       </Table>
+    </Card>
+  );
+}
+
+interface ApiKeyRow {
+  id: number;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  lastUsedIp: string | null;
+  revokedAt: string | null;
+  createdBy: string;
+}
+
+/** Keys for the Vayrone website admin panel (and other systems) to issue licences through the API. */
+function ApiKeys() {
+  const list = useResource(() => get<ApiKeyRow[]>('/api/api-keys'));
+  const [name, setName] = useState('Website admin panel');
+  const [created, setCreated] = useState<{ name: string; key: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const create = useAction(async () => {
+    const r = await post<{ name: string; key: string }>('/api/api-keys', { name });
+    setCreated(r);
+    setCopied(false);
+    list.reload();
+  });
+  const revoke = useAction(async (k: ApiKeyRow) => {
+    await api('DELETE', `/api/api-keys/${k.id}`);
+    list.reload();
+  });
+  return (
+    <Card title="API keys" className="mt-4">
+      <p className="mb-3 text-sm text-slate-600">
+        Let the Vayrone website admin panel create clients and licences here. A key can do what a staff login can (not settings, plans or logins). Keep it only on the website&apos;s server, never in a
+        browser page. Its actions appear in the history as &quot;API key&quot;.
+      </p>
+      <ErrorBanner error={list.error ?? create.error ?? revoke.error} />
+      <div className="mb-3 flex flex-wrap gap-2">
+        <div className="w-full sm:w-72">
+          <Input id="api-key-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="What uses this key" aria-label="Key name" />
+        </div>
+        <Button busy={create.busy} disabled={name.trim().length < 2} onClick={() => void create.run()}>
+          Create key
+        </Button>
+      </div>
+      {!list.data ? (
+        <Spinner />
+      ) : !list.data.length ? (
+        <Empty>No API keys yet.</Empty>
+      ) : (
+        <Table head={['Name', 'Key', 'Created', 'Last used', '']}>
+          {list.data.map((k) => (
+            <tr key={k.id} className={k.revokedAt ? 'opacity-60' : ''}>
+              <Td>
+                {k.name}
+                {k.revokedAt && (
+                  <span className="ml-2">
+                    <Badge>revoked</Badge>
+                  </span>
+                )}
+              </Td>
+              <Td className="font-mono text-xs">{k.prefix}…</Td>
+              <Td className="text-xs">
+                {when(k.createdAt)} · {k.createdBy}
+              </Td>
+              <Td className="text-xs">{k.lastUsedAt ? `${when(k.lastUsedAt)} · ${k.lastUsedIp ?? ''}` : 'never'}</Td>
+              <Td className="text-right">
+                {!k.revokedAt && (
+                  <Button variant="ghost" busy={revoke.busy} onClick={() => window.confirm(`Revoke "${k.name}"? Anything using it stops working at once.`) && void revoke.run(k)}>
+                    Revoke
+                  </Button>
+                )}
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      <Modal open={Boolean(created)} title="Copy the new API key now" onClose={() => setCreated(null)}>
+        <p className="text-sm text-slate-600">
+          This is the only time the key for <span className="font-medium">{created?.name}</span> is shown. Put it in the website server&apos;s environment as <span className="font-mono">VLS_API_KEY</span>.
+        </p>
+        <Textarea readOnly rows={2} className="font-mono text-xs" value={created?.key ?? ''} onFocus={(e) => e.currentTarget.select()} />
+        <Button
+          variant="secondary"
+          onClick={() => {
+            const t = created?.key ?? '';
+            navigator.clipboard?.writeText(t).then(() => setCopied(true), () => setCopied(false));
+          }}
+        >
+          {copied ? 'Copied' : 'Copy key'}
+        </Button>
+      </Modal>
     </Card>
   );
 }

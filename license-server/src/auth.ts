@@ -50,7 +50,11 @@ export function registerAuth(app: FastifyInstance, db: Db): void {
   app.addHook('onRequest', async (req) => {
     req.staff = null;
     const token = req.cookies[SID];
-    if (!token) return;
+    if (!token) {
+      const bearer = /^Bearer (vls_[A-Za-z0-9_-]{20,100})$/.exec(req.headers.authorization ?? '')?.[1];
+      if (bearer && req.url.startsWith('/api/') && !req.url.startsWith('/api/v1/') && !req.url.startsWith('/api/auth/')) req.staff = await apiKeyStaff(db, bearer, req.ip);
+      return;
+    }
     const s = await one<{ sid: number; last_seen_at: Date; expires_at: Date; id: number; email: string; name: string; role: StaffRole; reseller_id: number | null; is_enabled: number; r_enabled: number | null }>(
       db,
       `SELECT s.id sid, s.last_seen_at, s.expires_at, u.id, u.email, u.name, u.role, u.reseller_id, u.is_enabled, r.is_enabled r_enabled
@@ -69,6 +73,29 @@ export function registerAuth(app: FastifyInstance, db: Db): void {
     const h = req.headers[CSRF_HEADER];
     if (!c || typeof h !== 'string' || c.length !== h.length || !timingSafeEqual(Buffer.from(c), Buffer.from(h))) throw new HttpError(403, 'CSRF', 'Missing or invalid CSRF token; reload the page');
   });
+}
+
+/** Prefix of every API key; the rest is 32 random bytes (base64url). */
+export const API_KEY_PREFIX = 'vls_';
+
+export function newApiKey(): { key: string; prefix: string; hash: string } {
+  const key = `${API_KEY_PREFIX}${randomBytes(32).toString('base64url')}`;
+  return { key, prefix: key.slice(0, 12), hash: sha256(key).toString('hex') };
+}
+
+/**
+ * An API key signs in as a "staff" member (never owner, never a partner). Its actions
+ * are recorded as the owner who created the key, with the key's name in `email`.
+ */
+async function apiKeyStaff(db: Db, key: string, ip: string): Promise<Staff | null> {
+  const k = await one<{ id: number; name: string; created_by: number; last_used_at: Date | null; is_enabled: number }>(
+    db,
+    'SELECT k.id, k.name, k.created_by, k.last_used_at, u.is_enabled FROM api_keys k JOIN staff_users u ON u.id = k.created_by WHERE k.key_hash = ? AND k.revoked_at IS NULL',
+    [sha256(key).toString('hex')],
+  );
+  if (!k || !k.is_enabled) return null;
+  if (!k.last_used_at || Date.now() - new Date(k.last_used_at).getTime() > 60_000) await exec(db, 'UPDATE api_keys SET last_used_at = ?, last_used_ip = ? WHERE id = ?', [new Date(), ip, k.id]);
+  return { id: k.created_by, email: `api-key:${k.name}`, name: `API key "${k.name}"`, role: 'staff', resellerId: null, sessionId: 0 };
 }
 
 export function requireStaff(...roles: StaffRole[]): preHandlerAsyncHookHandler {

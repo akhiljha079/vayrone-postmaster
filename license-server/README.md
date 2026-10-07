@@ -76,6 +76,22 @@ Back up three things together:
 - `secret.key`, needed to read the stored SMTP/WhatsApp credentials;
 - the signing key, kept offline.
 
+## Website admin panel (API keys)
+
+The Vayrone website's admin panel can create clients and licences, change user counts, renew, suspend and process offline files through this server:
+
+1. **Create a key.** Sign in as owner, go to **Settings → API keys**, and create a key. It is shown once.
+2. **Give the key to the website.** Put it in the website server's environment as `VLS_API_KEY`, with `VLS_URL` set to this server's address.
+3. **Install the pages.** Ready-made Next.js admin pages and a dependency-free client are in [integrations/nextjs](integrations/nextjs/README.md).
+
+How keys behave:
+
+- **Sending a key:** requests carry `Authorization: Bearer vls_…`.
+- **What a key can do:** the same as a *staff* login, on the `/api/clients`, `/api/licenses`, `/api/plans` (read), `/api/activations` and `/api/offline` routes. It can never act as owner, never use `/api/auth`, and never manage keys.
+- **Storage:** only a SHA-256 of each key is stored.
+- **History:** every use is recorded, and each action appears as `API key "<name>"`.
+- **Revoking:** a revoked key stops working at once.
+
 ## Customer offline portal
 
 Offline customers use `https://license.vayrone.com/portal`:

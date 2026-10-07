@@ -78,6 +78,7 @@ export class Client {
   post = (u: string, b: unknown = {}) => this.req('POST', u, b);
   put = (u: string, b: unknown) => this.req('PUT', u, b);
   patch = (u: string, b: unknown) => this.req('PATCH', u, b);
+  del = (u: string) => this.req('DELETE', u);
   async login(email: string, password = 'Owner#Passw0rd'): Promise<LightMyRequestResponse> {
     this.cookies.clear();
     return this.post('/api/auth/login', { email, password });
