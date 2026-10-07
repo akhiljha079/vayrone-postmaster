@@ -4,6 +4,10 @@
 
 > Proprietary software © Vayrone Infratech, Agra, India. Not for redistribution in source form.
 
+## Licences and purchase
+
+For licences, pricing, renewals and purchase, contact **Vayrone Infratech**: [info@vayrone.com](mailto:info@vayrone.com).
+
 ## Status
 
 | Phase | Scope | State |
