@@ -74,15 +74,26 @@ describe('licence keys', () => {
   });
 
   it('catches typing mistakes with the check character', () => {
-    let caught = 0;
-    for (let i = 0; i < 200; i++) {
-      const k = generateLicenseKey();
-      const pos = 4 + Math.floor(Math.random() * 5);
-      const c = k[pos]!;
-      const typo = k.slice(0, pos) + (c === 'A' ? 'B' : 'A') + k.slice(pos + 1);
-      if (normalizeLicenseKey(typo) === null) caught++;
+    // Deterministic: fixed keys, every single-character substitution at every position.
+    // One check character over 32 symbols misses about 1 in 32 (3.1%) of such typos.
+    const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+    let seed = 0x56504d;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) >>> 8) % 32;
+    let total = 0;
+    let missed = 0;
+    for (let n = 0; n < 200; n++) {
+      const body = Array.from({ length: 20 }, () => B32[rnd()]).join('');
+      const check = [...B32].find((c) => normalizeLicenseKey(`VPM${body}${c}`) !== null)!;
+      for (let p = 0; p < 20; p++) {
+        for (const ch of B32) {
+          if (ch === body[p]) continue;
+          total++;
+          if (normalizeLicenseKey(`VPM${body.slice(0, p)}${ch}${body.slice(p + 1)}${check}`) !== null) missed++;
+        }
+      }
     }
-    expect(caught).toBeGreaterThan(180);
+    expect(total).toBe(200 * 20 * 31);
+    expect(missed / total).toBeLessThan(0.04);
     expect(normalizeLicenseKey('VPM-123')).toBeNull();
   });
 });
