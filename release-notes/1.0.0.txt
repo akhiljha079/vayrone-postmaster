@@ -1,0 +1,17 @@
+Vayrone PostMaster 1.0.0
+
+The office mail server for companies whose mailboxes are at an external provider
+(Gmail, Zoho, GoDaddy, Hostinger, Microsoft 365, cPanel).
+
+- Fetches every employee's provider mail into an office mailbox within seconds (IMAP push or POP3),
+  and sends through one provider account with each person's own address.
+- Works with Outlook, Thunderbird, phones and webmail, on a LAN password; folders are the same everywhere.
+- PostMaster start date: only mail received from the moment PostMaster takes over is downloaded,
+  with its original date, so moving from another mail server (e.g. QLC PostMaster) causes no duplicates.
+- Spam, virus and dangerous-attachment filtering with quarantine.
+- Easy rules: copy all mail of a person, mail from a sender, or mail by words to someone; forwarding.
+- Compliance archive by mailbox (Received / Sent), kept even when users delete mail.
+- Automatic backups (disk, NAS, cloud), alerts, signed automatic updates.
+- Starts with Windows; desktop shortcut; "Vayrone PostMaster status" health check.
+
+For licences and purchase: info@vayrone.com
