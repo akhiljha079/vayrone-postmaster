@@ -43,7 +43,17 @@ The browser warns about the certificate the first time. This is expected; a self
 
 ## Opening PostMaster
 
-PostMaster runs as Windows services in the background, so there is no program window. **It starts by itself whenever the PC or server starts**, before anyone logs in, and a stopped service is restarted automatically. You open it in the browser:
+PostMaster runs as Windows services in the background, so there is no program window. **It starts by itself whenever the PC or server starts**, before anyone logs in, and a stopped service is restarted automatically:
+
+- every service starts automatically and is restarted if it crashes;
+- the Updater service also acts as a watchdog: every 30 seconds it starts the database, the mail server or the worker if one of them is stopped (for example after a boot where the database was slow);
+- a boot task (*Task Scheduler → Vayrone PostMaster → Start services*) checks again 2 minutes after every start of Windows.
+
+To keep a service stopped on purpose, set its start type to *Manual* in `services.msc`; the watchdog only starts services set to *Automatic*.
+
+**Tray icon.** After logon the Vayrone PostMaster icon appears in the system tray (next to the clock; if hidden, click the ^ arrow and drag it onto the taskbar). A green dot means everything is running, amber means starting, red means stopped, and a notification appears when PostMaster stops. Double-click it to open the admin panel; right-click for the status of each service, **Start PostMaster**, **Restart PostMaster** (both ask for administrator rights) and the status window. Hiding the icon does not stop PostMaster.
+
+You open it in the browser:
 
 - **Desktop:** double-click **Vayrone PostMaster** (created by the installer).
 - **Start menu:** *Vayrone PostMaster → Open Vayrone PostMaster*.
@@ -93,6 +103,7 @@ To open the wizard from another PC, use `https://<server-ip>/setup?token=<token>
 
 | Problem | What to check |
 |---------|---------------|
+| Not running after a restart | Wait 2 minutes after logon (the watchdog and boot task start anything that failed). Then right-click the tray icon → **Start PostMaster**. If it stops again, look in `<data>\logs\VayronePostMasterUpdater.out.log` (watchdog lines) and `VayronePostMaster.out.log`. |
 | Browser cannot open the admin page | Run Start menu → **Vayrone PostMaster status**. It shows each service, the database and the exact address (use **https://**). Then look in `<data>\logs\VayronePostMaster.out.log`. |
 | `localhost` alone does not open | Type `https://localhost` (or `https://localhost:8443`). Port 80 is taken by another web server, so the automatic forwarding is off. |
 | Service stops right after starting | Look in the same log. Typical causes: another program uses a mail port (change the port in Admin → Network & TLS, or stop the other program), or the database service is stopped. |

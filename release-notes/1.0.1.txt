@@ -1,0 +1,9 @@
+Vayrone PostMaster 1.0.1
+
+- Always running after a restart: all services start automatically, and a watchdog (the Updater
+  service) plus a boot task start the database, mail server and worker if any of them did not start.
+- New tray icon next to the Windows clock: green / amber / red status, a notification when PostMaster
+  stops, double-click to open, right-click to start or restart PostMaster.
+- New Vayrone PostMaster logo (icons, login page, setup wizard, installer).
+
+For licences and purchase: info@vayrone.com

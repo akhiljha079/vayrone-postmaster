@@ -3,6 +3,7 @@
 //   1. release\win-x64 (scripts/build-release.mjs --target win-x64)
 //   2. .cache\win\WinSW-x64.exe            (WinSW, MIT)
 //   3. .cache\win\mariadb\                 (MariaDB LTS portable zip, GPLv2, unmodified)
+//   3b. .cache\win\VayronePostMasterTray.exe   (installer\windows\tray\Tray.cs, Windows only)
 //   4. ISCC installer\windows\vayrone-postmaster.iss → dist\VayronePostMaster-Setup-<ver>.exe
 //
 //   node scripts/package-windows.mjs [--mariadb 11.4] [--mariadb-zip path.zip] [--release] [--no-iscc]
@@ -90,6 +91,19 @@ if (!existsSync(join(mdir, 'bin', 'mariadb-install-db.exe'))) {
       'or on request from Vayrone Infratech, Agra, India, for at least three years from the date of distribution.\r\n',
   );
   log(`MariaDB prepared from ${zip}`);
+}
+
+// 3b. tray icon (C#, compiled with the .NET Framework 4 compiler that ships with Windows)
+if (process.platform === 'win32') {
+  const csc = join(process.env.WINDIR ?? 'C:\\Windows', 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe');
+  execFileSync(csc, [
+    '/nologo', '/codepage:65001', '/optimize+', '/target:winexe', '/platform:anycpu',
+    '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll', '/r:System.ServiceProcess.dll',
+    `/win32icon:${join(root, 'installer/windows/assets/vpm.ico')}`,
+    `/out:${join(cache, 'VayronePostMasterTray.exe')}`,
+    join(root, 'installer/windows/tray/Tray.cs'),
+  ], { stdio: 'inherit' });
+  log('tray icon built');
 }
 
 // 4. installer

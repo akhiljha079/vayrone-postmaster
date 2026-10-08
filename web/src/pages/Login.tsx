@@ -35,7 +35,7 @@ export function Login() {
             {branding?.company?.logoUrl ? (
               <img src={branding.company.logoUrl} alt="" className="mx-auto mb-3 h-16 w-16 rounded-lg bg-white object-contain p-1.5" />
             ) : (
-              <img src="/favicon.svg" alt="" className="mx-auto mb-3 h-14 w-14" />
+              <img src="/logo.png" alt="Vayrone PostMaster" className="mx-auto mb-3 h-36 w-36 rounded-2xl bg-white p-1 shadow-xl" />
             )}
             {branding?.company && <div className="text-lg font-semibold">{branding.company.name}</div>}
             <div className="text-sm text-white/80">Vayrone PostMaster by Vayrone Infratech</div>

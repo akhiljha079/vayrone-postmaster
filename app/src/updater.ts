@@ -26,6 +26,7 @@ import {
   type CoreConfig,
 } from '@vpm/core';
 import { compareVersions, currentTarget, extractUpdate, readUpdateManifest, trustedKeys, type KeyRing, type UpdatePayload } from '@vpm/license-client';
+import { ensureServices } from './watchdog.js';
 
 const run = promisify(execFile);
 
@@ -256,8 +257,10 @@ export async function applyPendingUpdate(o: ApplyOptions): Promise<ApplyOutcome>
 /** Windows updater service: poll for requests; restart self (exit 75) after the executable was replaced. */
 export async function runUpdaterLoop(o: Omit<ApplyOptions, 'log'> & { log: (m: string) => void }): Promise<never> {
   const alive = join(updatesDir(o.config.dataPath), 'updater.alive');
-  for (;;) {
+  for (let tick = 0; ; tick++) {
     writeFileSync(alive, new Date().toISOString());
+    // Watchdog: restart PostMaster if it is not running (after a failed boot, a crash loop WinSW gave up on, …).
+    if (tick % 3 === 0) await ensureServices(o.log, ['VayronePostMasterUpdater']).catch((err) => o.log(`watchdog error: ${(err as Error).message}`));
     try {
       const r = await applyPendingUpdate(o);
       if (r.result !== 'none') {

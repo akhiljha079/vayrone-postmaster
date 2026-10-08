@@ -1,21 +1,34 @@
 #!/usr/bin/env node
-// Draws the PostMaster icon (same design as web/public/favicon.svg) into a
-// Windows .ico with 16, 24, 32, 48, 64, 128 and 256 px images. No dependencies.
-//   node scripts/make-icon.mjs [out.ico]   (default installer/windows/assets/vpm.ico)
+// Draws the PostMaster icon (the Vayrone PostMaster mark, same design as web/public/favicon.svg)
+// into a Windows .ico with 16, 24, 32, 48, 64, 128 and 256 px images. No dependencies.
+//   node scripts/make-icon.mjs [out.ico] [--png 512 out.png] [--white]   (default installer/windows/assets/vpm.ico)
 import { writeFileSync } from 'node:fs';
 import { deflateSync, crc32 } from 'node:zlib';
 
-const out = process.argv[2] ?? new URL('../installer/windows/assets/vpm.ico', import.meta.url).pathname;
-const NAVY = [0x1e, 0x3a, 0x8a];
+const pngArg = process.argv.indexOf('--png');
+const out = (pngArg === 2 ? undefined : process.argv[2]) ?? new URL('../installer/windows/assets/vpm.ico', import.meta.url).pathname;
+const ORANGE = [0xff, 0x6b, 0x0a];
+const NAVY = [0x0b, 0x1b, 0x35];
 const WHITE = [0xff, 0xff, 0xff];
-const SKY = [0x38, 0xbd, 0xf8];
 
-// Geometry in the favicon's 32×32 coordinate space.
-const insideRoundRect = (x, y) => {
-  const r = 7;
-  const cx = Math.min(Math.max(x, r), 32 - r);
-  const cy = Math.min(Math.max(y, r), 32 - r);
-  return x >= 0 && x <= 32 && y >= 0 && y <= 32 && (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
+// Geometry in the favicon's viewBox (x 300…955, y 150…805): the orange V, speed lines,
+// and the navy envelope with a white outline and flap.
+// --white: opaque white background (installer bitmaps have no transparency).
+const BACKGROUND = process.argv.includes('--white') ? WHITE : null;
+const VIEW = { x: 300, y: 150, size: 655 };
+const V = [[305, 167], [400, 167], [627, 610], [855, 167], [950, 167], [627, 795]];
+const inPolygon = (x, y, pts) => {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+const inRoundRect = (x, y, rx, ry, w, h, r) => {
+  const cx = Math.min(Math.max(x, rx + r), rx + w - r);
+  const cy = Math.min(Math.max(y, ry + r), ry + h - r);
+  return x >= rx && x <= rx + w && y >= ry && y <= ry + h && (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
 };
 const distSeg = (px, py, ax, ay, bx, by) => {
   const dx = bx - ax, dy = by - ay;
@@ -23,25 +36,29 @@ const distSeg = (px, py, ax, ay, bx, by) => {
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 };
 const onPath = (x, y, pts, half) => pts.slice(1).some((p, i) => distSeg(x, y, pts[i][0], pts[i][1], p[0], p[1]) <= half);
-const ENVELOPE = [[7, 10], [25, 10], [25, 22], [7, 22], [7, 10]];
-const FLAP = [[7, 11], [16, 18], [25, 11]];
+const SPEED = [[483, 262, 86], [498, 309, 70], [515, 353, 53]];
+const FLAP = [[586, 273], [676, 350], [767, 273]];
+const FOLDS = [[[586, 400], [640, 347]], [[767, 400], [713, 347]]];
 
 function sample(x, y) {
-  if (!insideRoundRect(x, y)) return null;
-  if (onPath(x, y, FLAP, 1)) return SKY;
-  if (onPath(x, y, ENVELOPE, 1)) return WHITE;
-  return NAVY;
+  if (inRoundRect(x, y, 580, 266, 193, 140, 9)) {
+    if (onPath(x, y, FLAP, 4.5) || FOLDS.some((f) => onPath(x, y, f, 4.5))) return WHITE;
+    return NAVY;
+  }
+  if (inRoundRect(x, y, 572, 258, 209, 156, 14)) return WHITE;
+  if (inPolygon(x, y, V) || SPEED.some(([rx, ry, w]) => inRoundRect(x, y, rx, ry, w, 18, 9))) return ORANGE;
+  return BACKGROUND;
 }
 
 function render(size) {
-  const ss = 4; // 4×4 supersampling for smooth edges
+  const ss = size <= 64 ? 8 : 4; // 4×4 supersampling for smooth edges
   const px = Buffer.alloc(size * size * 4);
   for (let j = 0; j < size; j++) {
     for (let i = 0; i < size; i++) {
       let r = 0, g = 0, b = 0, a = 0;
       for (let sy = 0; sy < ss; sy++) {
         for (let sx = 0; sx < ss; sx++) {
-          const c = sample(((i + (sx + 0.5) / ss) * 32) / size, ((j + (sy + 0.5) / ss) * 32) / size);
+          const c = sample(VIEW.x + ((i + (sx + 0.5) / ss) * VIEW.size) / size, VIEW.y + ((j + (sy + 0.5) / ss) * VIEW.size) / size);
           if (c) (r += c[0], g += c[1], b += c[2], a++);
         }
       }
@@ -92,3 +109,8 @@ const dir = sizes.map((s, i) => {
 });
 writeFileSync(out, Buffer.concat([header, ...dir, ...images]));
 console.log(`Wrote ${out} (${sizes.join(', ')} px)`);
+if (pngArg > 0) {
+  const size = Number(process.argv[pngArg + 1]);
+  writeFileSync(process.argv[pngArg + 2], png(size, render(size)));
+  console.log(`Wrote ${process.argv[pngArg + 2]} (${size} px)`);
+}

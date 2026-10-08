@@ -33,6 +33,7 @@ import { startWeb } from '@vpm/server/service';
 import { startWorker } from '@vpm/worker/service';
 import { defaultConfigPath, installHome } from './paths.js';
 import { applyPendingUpdate, runUpdaterLoop } from './updater.js';
+import { ensureServices } from './watchdog.js';
 
 type Role = 'core' | 'worker' | 'all';
 
@@ -150,6 +151,12 @@ export async function main(argv: string[]): Promise<void> {
       // Windows: the "Vayrone PostMaster Updater" service.
       const config = loadConfig(defaultConfigPath());
       return runUpdaterLoop({ config, home: installHome(), log: (m) => console.log(m) });
+    }
+    case 'ensure-services': {
+      // Windows boot task (SYSTEM): start any automatic PostMaster service that is not running.
+      const started = await ensureServices((m) => console.log(m));
+      console.log(started.length ? `Started: ${started.join(', ')}` : 'All PostMaster services are running.');
+      return;
     }
     case 'gen-secret':
       // Installers use this for the bundled database's root password.

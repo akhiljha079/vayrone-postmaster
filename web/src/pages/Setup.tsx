@@ -169,9 +169,12 @@ export function SetupWizard() {
 
   return (
     <div className="min-h-full bg-slate-50">
-      <header className="bg-brand-900 px-6 py-4 text-white">
-        <div className="text-lg font-semibold">Vayrone PostMaster — setup</div>
-        <div className="text-sm text-white/70">Vayrone PostMaster by Vayrone Infratech · version {status.version}</div>
+      <header className="flex items-center gap-3 bg-brand-900 px-6 py-4 text-white">
+        <img src="/favicon.svg" alt="" className="h-10 w-10" />
+        <div>
+          <div className="text-lg font-semibold">Vayrone PostMaster — setup</div>
+          <div className="text-sm text-white/70">Vayrone PostMaster by Vayrone Infratech · version {status.version}</div>
+        </div>
       </header>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 p-4 md:flex-row md:p-8">
         <nav className="md:w-60">
@@ -212,7 +215,8 @@ function TokenScreen({ onOk }: { onOk: () => void }) {
     onOk();
   });
   return (
-    <div className="flex min-h-full items-center justify-center p-4">
+    <div className="flex min-h-full flex-col items-center justify-center gap-4 p-4">
+      <img src="/logo.png" alt="Vayrone PostMaster" className="h-32 w-32 rounded-2xl bg-white shadow" />
       <Card title="Vayrone PostMaster setup" className="w-full max-w-md">
         <p className="mb-3 text-sm text-slate-600">
           Enter the setup token shown at the end of the installation. On the server you can also run <code className="rounded bg-slate-100 px-1">vpm setup-token</code>.

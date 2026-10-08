@@ -51,7 +51,8 @@ SetupLogging=yes
 SetupIconFile=assets\vpm.ico
 #endif
 #ifexist "assets\wizard.bmp"
-WizardImageFile=assets\wizard.bmp
+WizardImageFile=assets\wizard.bmp,assets\wizard-2x.bmp
+WizardSmallImageFile=assets\wizard-small.bmp,assets\wizard-small-2x.bmp
 #endif
 ; Code signing (Phase 10): ISCC /Ssigntool="signtool.exe sign /fd sha256 /tr http://timestamp.digicert.com /td sha256 $f"
 #ifdef SignTool
@@ -65,6 +66,8 @@ WelcomeLabel2=This installs Vayrone PostMaster {#AppVersion}, the LAN mail serve
 [Files]
 Source: "{#Root}\release\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "assets\vpm.ico"; DestDir: "{app}"; Flags: ignoreversion
+; Tray icon for every user (built by scripts/package-windows.mjs on Windows).
+Source: "{#Root}\.cache\win\VayronePostMasterTray.exe"; DestDir: "{app}\tray"; Flags: ignoreversion skipifsourcedoesntexist
 ; MariaDB is installed when its service does not exist yet (first installation, or reinstalling after an
 ; uninstall that kept the data). Upgrades leave the running database engine alone.
 Source: "{#Root}\.cache\win\mariadb\*"; DestDir: "{app}\mariadb"; Flags: ignoreversion recursesubdirs createallsubdirs; Check: NeedDbEngine
@@ -91,6 +94,10 @@ Filename: "{autodesktop}\Vayrone PostMaster.url"; Section: "InternetShortcut"; K
 Filename: "{autodesktop}\Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "IconFile"; String: "{app}\vpm.ico"; Tasks: desktopicon
 Filename: "{autodesktop}\Vayrone PostMaster.url"; Section: "InternetShortcut"; Key: "IconIndex"; String: "0"; Tasks: desktopicon
 
+[Registry]
+; The tray icon starts at logon for every user.
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "VayronePostMasterTray"; ValueData: {app}\tray\VayronePostMasterTray.exe; Flags: uninsdeletevalue
+
 [InstallDelete]
 ; Older name of the Start-menu link.
 Type: files; Name: "{group}\Vayrone PostMaster admin.url"
@@ -107,10 +114,13 @@ Name: "{group}\Third-party licences"; Filename: "{app}\THIRD_PARTY_LICENSES.md"
 Name: "{group}\Uninstall Vayrone PostMaster"; Filename: "{uninstallexe}"
 
 [Run]
+Filename: "{app}\tray\VayronePostMasterTray.exe"; Flags: nowait runasoriginaluser skipifdoesntexist
 Filename: "{code:SetupUrl}"; Description: "Open the setup wizard"; Flags: postinstall shellexec nowait skipifsilent; Check: HasSetupUrl
 Filename: "{code:AdminUrl}"; Description: "Open Vayrone PostMaster"; Flags: postinstall shellexec nowait skipifsilent; Check: not HasSetupUrl
 
 [UninstallRun]
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM VayronePostMasterTray.exe"; Flags: runhidden; RunOnceId: "StopTray"
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""Vayrone PostMaster\Start services"" /F"; Flags: runhidden; RunOnceId: "RemoveBootTask"
 Filename: "{app}\service\VayronePostMasterUpdater.exe"; Parameters: "stop"; Flags: runhidden; RunOnceId: "StopUpdater"
 Filename: "{app}\service\VayronePostMasterUpdater.exe"; Parameters: "uninstall"; Flags: runhidden; RunOnceId: "RemoveUpdater"
 Filename: "{app}\service\VayronePostMasterWorker.exe"; Parameters: "stop"; Flags: runhidden; RunOnceId: "StopWorker"
@@ -268,6 +278,8 @@ var
   Code: Integer;
 begin
   Result := '';
+  // The tray icon is replaced too (it restarts after setup).
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM VayronePostMasterTray.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
   // Upgrades: stop the program services; the database keeps running.
   if IsUpgrade() then begin
     Exec(ExpandConstant('{sys}\sc.exe'), 'stop VayronePostMasterUpdater', '', SW_HIDE, ewWaitUntilTerminated, Code);
@@ -388,13 +400,18 @@ begin
   RunHidden(App + '\service\VayronePostMaster.exe', 'install', 'install core');
   RunHidden(App + '\service\VayronePostMasterWorker.exe', 'install', 'install worker');
   RunHidden(App + '\service\VayronePostMasterUpdater.exe', 'install', 'install updater');
-  // Run on startup, every time (also on upgrades): the database first, the mail services
-  // once Windows has finished booting (network ready); any crash restarts the service.
+  // Run on startup, every time (also on upgrades). All automatic; any crash restarts the service.
+  // If the database is not up yet at boot, Windows does not retry the services that depend on it:
+  // the Updater (no dependencies) restarts them within 30 s, and the boot task below is a backstop.
   RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterDB start= auto', 'autostart db');
   RunHidden(ExpandConstant('{sys}\sc.exe'), 'failure VayronePostMasterDB reset= 3600 actions= restart/5000/restart/10000/restart/30000', 'recovery db');
-  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMaster start= delayed-auto', 'autostart core');
-  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterWorker start= delayed-auto', 'autostart worker');
-  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterUpdater start= delayed-auto', 'autostart updater');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMaster start= auto', 'autostart core');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterWorker start= auto', 'autostart worker');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterUpdater start= auto', 'autostart updater');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'failure VayronePostMaster reset= 3600 actions= restart/5000/restart/10000/restart/30000', 'recovery core');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'failure VayronePostMasterWorker reset= 3600 actions= restart/5000/restart/10000/restart/30000', 'recovery worker');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'failure VayronePostMasterUpdater reset= 3600 actions= restart/5000/restart/10000/restart/30000', 'recovery updater');
+  RunHidden(ExpandConstant('{sys}\schtasks.exe'), '/Create /F /TN "Vayrone PostMaster\Start services" /SC ONSTART /DELAY 0002:00 /RU SYSTEM /RL HIGHEST /TR "\"' + App + '\bin\vpm.exe\" ensure-services"', 'boot task');
   RunHidden(App + '\service\VayronePostMaster.exe', 'start', 'start core');
   RunHidden(App + '\service\VayronePostMasterWorker.exe', 'start', 'start worker');
   RunHidden(App + '\service\VayronePostMasterUpdater.exe', 'start', 'start updater');
