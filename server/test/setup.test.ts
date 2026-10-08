@@ -109,7 +109,12 @@ describe.skipIf(!dbConfig())('setup wizard API', () => {
 
   it('storage: nightly backup schedules, archive and trash retention', async () => {
     expect((await call('PUT', '/storage', { backupPath: join(backupDir, 'missing'), archiveEnabled: true, archiveDays: 2555, trashDays: 30 })).json().message).toMatch(/Backup folder: .*does not exist/);
-    expect((await call('PUT', '/storage', { backupPath: backupDir, backupTime: '02:30', keepFull: 6, archiveEnabled: true, archiveDays: 3650, trashDays: 30 })).statusCode).toBe(200);
+    // Fresh install: no start date chosen yet (the wizard then defaults to "now").
+    expect((await call('GET', '/state')).json().storage.fetchStartAt).toBeUndefined();
+    expect((await call('PUT', '/storage', { backupPath: backupDir, backupTime: '02:30', keepFull: 6, archiveEnabled: true, archiveDays: 3650, trashDays: 30, fetchStartAt: '2026-10-08T10:30' })).statusCode).toBe(200);
+    expect((await call('GET', '/state')).json().storage.fetchStartAt).toBe('2026-10-08T10:30');
+    await ctx.settings.set('fetch', 'policy', { startAt: null }); // shared test database: leave other suites unaffected
+    ctx.settings.invalidate();
     const sched = await rows<{ kind: string; cron: string; keep_full: number }>(
       ctx.db,
       "SELECT s.kind, s.cron, s.keep_full FROM backup_schedules s JOIN backup_targets t ON t.id = s.target_id WHERE t.name = 'Setup: nightly backup' ORDER BY s.kind",

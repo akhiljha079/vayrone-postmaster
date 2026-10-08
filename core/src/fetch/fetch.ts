@@ -162,8 +162,12 @@ class Run {
     }
   }
 
-  /** Stores and delivers one downloaded message. Returns the local item id (null when it was a duplicate). */
-  async deliver(raw: Buffer): Promise<number | null> {
+  /**
+   * Stores and delivers one downloaded message. Returns the local item id (null when it was a duplicate).
+   * `receivedAt` (when it reached the provider) becomes its received date, so mail programs show the
+   * original date rather than the moment PostMaster downloaded it.
+   */
+  async deliver(raw: Buffer, receivedAt: Date | null): Promise<number | null> {
     const message = await this.ctx.store.ingest(raw);
     const rp = message.parsed.headers.find((h) => h.key === 'return-path')?.value.replace(/[<>\s]/g, '') ?? '';
     const [o] = await this.ctx.mailflow.inbound({
@@ -173,6 +177,7 @@ class Run {
       direction: 'in',
       envelopeFrom: rp,
       externalAccountId: this.acc.id,
+      receivedAt: plausible(receivedAt),
     });
     if (!o) throw new Error('no delivery outcome');
     if (o.status === 'overquota') throw new QuotaFullError();
@@ -196,6 +201,13 @@ class Run {
     if (this.acc.leave_policy !== 'keep_days' || !first) return false;
     return Date.now() - first.getTime() >= this.acc.keep_days * 86400_000;
   }
+}
+
+/** An arrival time worth keeping: not in the future (clock skew allowed) and not before 1995. */
+function plausible(d: Date | null): Date | null {
+  if (!d || Number.isNaN(d.getTime())) return null;
+  if (d.getTime() > Date.now() + 86_400_000 || d.getFullYear() < 1995) return null;
+  return d;
 }
 
 /**
@@ -264,7 +276,7 @@ async function fetchPop3(ctx: CoreContext, acc: ExternalAccount, password: strin
       }
       await run.checkQuota(sizes.get(n) ?? 0);
       const raw = await c.retr(n);
-      const itemId = await run.deliver(raw);
+      const itemId = await run.deliver(raw, arrivalDate(raw));
       await run.markSeen(key, itemId);
       downloaded++;
       if (acc.leave_policy === 'delete') toDelete.push({ n, key });
@@ -361,8 +373,12 @@ async function fetchImap(ctx: CoreContext, acc: ExternalAccount, password: strin
           knownIds = new Set(have.map((x) => Buffer.from(x.h).toString('hex')));
         }
 
-        // "Download mail received from": the provider's arrival date (INTERNALDATE), by day.
-        const tooOld = new Set<number>(acc.fetch_since && fresh.length ? ((await client.search({ before: new Date(acc.fetch_since) }, { uid: true })) || []) : []);
+        // "Download mail received from": the provider's arrival date (INTERNALDATE). SEARCH works by
+        // whole days (and imapflow rounds a BEFORE with a time up to the next day), so ask only for
+        // mail before the start day; mail on the start day itself is checked to the minute below.
+        const since = acc.fetch_since ? new Date(acc.fetch_since) : null;
+        const startDay = since ? new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate())) : null;
+        const tooOld = new Set<number>(startDay && fresh.length ? ((await client.search({ before: startDay }, { uid: true })) || []) : []);
 
         const toDelete: number[] = [];
         for (const uid of fresh) {
@@ -384,10 +400,16 @@ async function fetchImap(ctx: CoreContext, acc: ExternalAccount, password: strin
               continue;
             }
           }
-          const meta = await client.fetchOne(String(uid), { size: true, source: true }, { uid: true });
+          const meta = await client.fetchOne(String(uid), { size: true, source: true, internalDate: true }, { uid: true });
           if (!meta || !meta.source) continue; // expunged meanwhile
+          const arrived = meta.internalDate ? new Date(meta.internalDate) : arrivalDate(meta.source);
+          // SEARCH BEFORE works by day; on the start day itself compare the exact time.
+          if (run.tooOld(arrived)) {
+            await run.markSkipped(prefix + uid);
+            continue;
+          }
           await run.checkQuota(meta.size ?? meta.source.length);
-          const itemId = await run.deliver(meta.source);
+          const itemId = await run.deliver(meta.source, arrived);
           await run.markSeen(prefix + uid, itemId);
           downloaded++;
           lastUid = uid;
@@ -425,9 +447,25 @@ async function fetchImap(ctx: CoreContext, acc: ExternalAccount, password: strin
 
 // ---------------------------------------------------------------------------
 
+/**
+ * PostMaster's start date (setting fetch.policy.startAt): external mail that reached the provider
+ * before it is never downloaded, for every mailbox without a date of its own. Set in the setup
+ * wizard (default: the moment of setup) and in Admin → External mailboxes.
+ */
+export interface FetchPolicy {
+  startAt: string | null;
+}
+
+export async function fetchStartDate(ctx: Pick<CoreContext, 'settings'>): Promise<Date | null> {
+  const p = await ctx.settings.get<Partial<FetchPolicy>>('fetch', 'policy', {});
+  const d = p.startAt ? new Date(p.startAt) : null;
+  return d && !Number.isNaN(d.getTime()) ? d : null;
+}
+
 export async function fetchAccount(ctx: CoreContext, acc: ExternalAccount, opts: FetchOptions): Promise<FetchResult> {
   const password = ctx.secrets.open(Buffer.from(acc.secret));
-  return acc.protocol === 'pop3' ? fetchPop3(ctx, acc, password, opts) : fetchImap(ctx, acc, password, opts);
+  const a = acc.fetch_since ? acc : { ...acc, fetch_since: await fetchStartDate(ctx) };
+  return a.protocol === 'pop3' ? fetchPop3(ctx, a, password, opts) : fetchImap(ctx, a, password, opts);
 }
 
 export interface TestResult {

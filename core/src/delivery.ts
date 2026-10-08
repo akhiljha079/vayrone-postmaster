@@ -37,6 +37,8 @@ export interface DeliverOptions {
   ignoreQuota?: boolean;
   externalAccountId?: number | null;
   clientIp?: string | null;
+  /** IMAP INTERNALDATE; default now. Fetched mail keeps its original arrival time at the provider. */
+  internalDate?: Date | null;
 }
 
 export class Delivery {
@@ -73,6 +75,7 @@ export class Delivery {
           flags: t.flags ?? 0,
           origin: o.origin,
           externalAccountId: o.externalAccountId ?? null,
+          ...(o.internalDate ? { internalDate: o.internalDate } : {}),
         });
       });
       if (!res) {

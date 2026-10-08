@@ -102,7 +102,7 @@ At the end, the browser opens the **setup wizard**. It walks through eight steps
 
 ## 5. Move employees to the office server (go-live)
 
-**Coming from another mail server (for example QLC PostMaster)?** Before go-live, open Admin → External mailboxes → **Start date for all…** and choose the switch-over day. PostMaster then downloads only new mail, so Outlook does not get years of old mail a second time. The old mail stays in each PC's Outlook (PST) and at the provider.
+**Coming from another mail server (for example QLC PostMaster)?** In the setup wizard's Storage step, the **PostMaster start date** is the moment of setup. Only external mail received from then on is downloaded, so Outlook does not get years of old mail a second time. It can be changed later in Admin → External mailboxes.
 
 Do this department by department, or all at once on a quiet day.
 

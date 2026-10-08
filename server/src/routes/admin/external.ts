@@ -2,7 +2,7 @@
 // never see or know the provider password).
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { db as dbm, resolveAlert, testExternalAccount, type CoreContext } from '@vpm/core';
+import { db as dbm, fetchStartDate, resolveAlert, testExternalAccount, type CoreContext } from '@vpm/core';
 import { audit, requireAdmin } from '../../guards.js';
 import { badRequest, forbidden, notFound, parsePatch } from '../../http.js';
 
@@ -25,14 +25,21 @@ export const PROVIDER_PRESETS = [
   { key: 'custom', name: 'Other / custom', imap: ['', 993, 'tls'], pop3: ['', 995, 'tls'], smtp: ['', 465, 'tls'] },
 ] as const;
 
-const FetchSince = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-08');
-/** Start of that day on this server's clock (the provider's arrival dates are compared to it). */
-const sinceDate = (d: string | null | undefined) => (d ? new Date(`${d}T00:00:00`) : null);
-/** Back to YYYY-MM-DD on the same (server) clock, so the date shown is the date chosen. */
+/** "Download mail received from": a date and time on this server's clock (2026-10-08T10:30), or a date (midnight). */
+const FetchSince = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/, 'Use a date and time like 2026-10-08T10:30')
+  .refine((v) => !Number.isNaN(sinceDate(v)!.getTime()), 'Not a valid date');
+function sinceDate(d: string | null | undefined): Date | null {
+  if (!d) return null;
+  return new Date(d.length === 10 ? `${d}T00:00:00` : `${d}:00`);
+}
+/** Back to YYYY-MM-DDTHH:MM on the same (server) clock, so what is shown is what was chosen. */
 const sinceText = (v: unknown) => {
   if (!v) return null;
   const d = new Date(v as string | Date);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
 const Body = z.object({
@@ -57,7 +64,7 @@ const Body = z.object({
   smtpPort: z.number().int().min(1).max(65535).nullable().optional(),
   smtpSecurity: Security.nullable().optional(),
   isEnabled: z.boolean().default(true),
-  /** "Download mail received from" (YYYY-MM-DD, server local time); null = all mail at the provider. */
+  /** This mailbox's own start (server local time); null = PostMaster's start date. */
   fetchSince: FetchSince.nullable().optional(),
 });
 
@@ -226,22 +233,22 @@ export function externalRoutes(ctx: CoreContext) {
       return { ok: true };
     });
 
-    /** One start date for many mailboxes (e.g. moving a whole office from another mail server). */
-    app.post('/external-accounts/fetch-since', { preHandler: write }, async (req) => {
-      const b = z.object({ fetchSince: FetchSince.nullable(), accountIds: z.array(Id).max(10_000).optional() }).parse(req.body);
-      const ids = b.accountIds?.length
-        ? (await rows<{ id: number }>(ctx.db, 'SELECT id FROM external_accounts WHERE id IN (?)', [b.accountIds])).map((r) => r.id)
-        : (await rows<{ id: number }>(ctx.db, 'SELECT id FROM external_accounts')).map((r) => r.id);
-      if (!ids.length) return { updated: 0 };
-      await exec(ctx.db, "UPDATE external_accounts SET fetch_since = ?, next_run_at = IF(is_enabled = 1 AND status <> 'auth_failed', ?, next_run_at), updated_at = ? WHERE id IN (?)", [
-        sinceDate(b.fetchSince),
-        new Date(),
-        new Date(),
-        ids,
-      ]);
+    /** PostMaster's start date: used by every mailbox without a date of its own. */
+    app.get('/external-accounts/start-date', { preHandler: read }, async () => {
+      const d = await fetchStartDate(ctx);
+      const custom = Number((await one<{ n: number }>(ctx.db, 'SELECT COUNT(*) n FROM external_accounts WHERE fetch_since IS NOT NULL'))?.n ?? 0);
+      return { startAt: sinceText(d), mailboxesWithOwnDate: custom };
+    });
+
+    app.put('/external-accounts/start-date', { preHandler: write }, async (req) => {
+      const b = z.object({ startAt: FetchSince.nullable() }).parse(req.body);
+      await ctx.settings.set('fetch', 'policy', { startAt: sinceDate(b.startAt)?.toISOString() ?? null }, req.auth!.user.id);
+      // Mailboxes that follow the PostMaster date: look at mail skipped under the old date again.
+      const ids = (await rows<{ id: number }>(ctx.db, 'SELECT id FROM external_accounts WHERE fetch_since IS NULL')).map((r) => r.id);
       await resetSkipped(ids);
-      await audit(ctx, req, 'external.fetch_since', 'external_account', null, { fetchSince: b.fetchSince, accounts: ids.length });
-      return { updated: ids.length };
+      if (ids.length) await exec(ctx.db, "UPDATE external_accounts SET next_run_at = ? WHERE id IN (?) AND is_enabled = 1 AND status <> 'auth_failed'", [new Date(), ids]);
+      await audit(ctx, req, 'external.start_date', 'settings', 'fetch.policy', { startAt: b.startAt });
+      return { startAt: b.startAt ? sinceText(sinceDate(b.startAt)) : null, mailboxes: ids.length };
     });
 
     app.delete<{ Params: { id: string } }>('/external-accounts/:id', { preHandler: write }, async (req) => {

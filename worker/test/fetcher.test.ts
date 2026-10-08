@@ -198,7 +198,46 @@ describe.skipIf(!dbConfig())('external POP3/IMAP fetcher', () => {
       expect(mine.sort()).toEqual([`${protocol} new 1`, `${protocol} new 2`, `${protocol} old 2`]);
       expect(await remoteCount(box.userId)).toBe(1); // only "old 1" (August) is left, untouched
     });
+
+    it(`${protocol.toUpperCase()}: start time is exact to the minute, and downloaded mail keeps its original date`, async () => {
+      const box = await remoteBox(0);
+      await putDated(box.userId, `${protocol} morning`, new Date('2026-10-02T09:00:00Z'));
+      await putDated(box.userId, `${protocol} afternoon`, new Date('2026-10-02T15:00:00Z'));
+      const id = await addAccount({ protocol, username: box.email, since: new Date('2026-10-02T12:00:00Z') });
+      await runOnce(id);
+      const got = await rows<{ s: string; d: Date }>(
+        core.ctx.db,
+        "SELECT m.hdr_subject s, i.internal_date d FROM mail_items i JOIN messages m ON m.id = i.message_id WHERE i.user_id = ? AND m.hdr_subject LIKE ?",
+        [aliceId, `${protocol} %ternoon`],
+      );
+      expect(got.map((g) => g.s)).toEqual([`${protocol} afternoon`]);
+      // Received date in Outlook = when it reached the provider, not when PostMaster fetched it.
+      expect(new Date(got[0]!.d).toISOString()).toBe('2026-10-02T15:00:00.000Z');
+      const morning = await rows(core.ctx.db, 'SELECT i.id FROM mail_items i JOIN messages m ON m.id = i.message_id WHERE i.user_id = ? AND m.hdr_subject = ?', [aliceId, `${protocol} morning`]);
+      expect(morning).toEqual([]);
+    });
   }
+
+  it('PostMaster start date: mailboxes without their own date start from it; after it everything arrives as usual', async () => {
+    await core.ctx.settings.set('fetch', 'policy', { startAt: new Date('2026-10-01T00:00:00Z').toISOString() });
+    core.ctx.settings.invalidate();
+    try {
+      const box = await remoteBox(0);
+      await putDated(box.userId, 'global before', new Date('2026-09-20T10:00:00Z'));
+      await putDated(box.userId, 'global after', new Date('2026-10-03T10:00:00Z'));
+      const id = await addAccount({ protocol: 'imap', username: box.email });
+      await runOnce(id);
+      let mine = (await localSubjects()).filter((x) => x.startsWith('global '));
+      expect(mine).toEqual(['global after']);
+      await putDated(box.userId, 'global later', new Date());
+      await runOnce(id);
+      mine = (await localSubjects()).filter((x) => x.startsWith('global '));
+      expect(mine.sort()).toEqual(['global after', 'global later']);
+    } finally {
+      await core.ctx.settings.set('fetch', 'policy', { startAt: null });
+      core.ctx.settings.invalidate();
+    }
+  });
 
   it('IMAP: STARTTLS, incremental UIDs, delete policy expunges remotely', async () => {
     const box = await remoteBox(2);

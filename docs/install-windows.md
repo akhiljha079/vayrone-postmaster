@@ -43,7 +43,7 @@ The browser warns about the certificate the first time. This is expected; a self
 
 ## Opening PostMaster
 
-PostMaster runs as Windows services in the background, so there is no program window. You open it in the browser:
+PostMaster runs as Windows services in the background, so there is no program window. **It starts by itself whenever the PC or server starts**, before anyone logs in, and a stopped service is restarted automatically. You open it in the browser:
 
 - **Desktop:** double-click **Vayrone PostMaster** (created by the installer).
 - **Start menu:** *Vayrone PostMaster → Open Vayrone PostMaster*.

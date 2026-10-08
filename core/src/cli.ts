@@ -137,12 +137,15 @@ async function status(d: CliDefaults): Promise<void> {
       ['VayronePostMasterUpdater', 'updates'],
     ] as const) {
       let state = 'not installed';
+      let start = '';
       try {
         state = /STATE\s+:\s+\d+\s+(\w+)/.exec(execFileSync('sc.exe', ['query', svc], { encoding: 'utf8' }))?.[1] ?? 'unknown';
+        start = /START_TYPE\s+:\s+\d+\s+(\w+)/.exec(execFileSync('sc.exe', ['qc', svc], { encoding: 'utf8' }))?.[1] ?? '';
       } catch {
         /* not installed */
       }
-      console.log(`${ok(state === 'RUNNING')}  Service ${svc} (${what}): ${state.toLowerCase()}`);
+      const auto = /AUTO/.test(start);
+      console.log(`${ok(state === 'RUNNING' && auto)}  Service ${svc} (${what}): ${state.toLowerCase()}${start ? (auto ? ', starts with Windows' : ', NOT set to start with Windows') : ''}`);
     }
   }
   let dbOk = false;

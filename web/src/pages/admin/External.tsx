@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { del, formatBytes, formatDate, get, patch, post } from '../../api';
+import { del, formatBytes, formatDate, get, patch, post, put } from '../../api';
 import { Badge, Button, Card, Empty, ErrorBanner, Field, Input, Modal, PageHeader, Select, Spinner, Table, Td, Toggle, useAction, useConfirm, useResource } from '../../components/ui';
 import { useUserOptions } from './Users';
 
@@ -71,24 +71,27 @@ const STATUS: Record<string, { label: string; color: 'green' | 'red' | 'amber' |
 
 const LEAVE_LABEL = { keep_days: 'Leave a copy, delete after N days', keep: 'Leave a copy on the server', delete: 'Delete from the server after download' };
 
-/** Today as YYYY-MM-DD on this computer's clock. */
-function todayIso(): string {
+/** Now as YYYY-MM-DDTHH:MM (a datetime-local value) on this computer's clock. */
+function nowLocal(): string {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
+const showSince = (v: string) => new Date(`${v}:00`).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /** One start date for all mailboxes: the day the office switches to PostMaster. */
-function StartDateModal({ count, onClose, onDone }: { count: number; onClose: () => void; onDone: (n: number) => void }) {
-  const [mode, setMode] = useState<'since' | 'all'>('since');
-  const [date, setDate] = useState(todayIso());
+/** PostMaster's start date: every mailbox without its own date downloads mail received from then on. */
+function StartDateModal({ current, onClose, onDone }: { current: string | null; onClose: () => void; onDone: (msg: string) => void }) {
+  const [mode, setMode] = useState<'since' | 'all'>(current || current === undefined ? 'since' : 'all');
+  const [date, setDate] = useState(current ?? nowLocal());
   const apply = useAction(async () => {
-    const r = await post<{ updated: number }>('/api/admin/external-accounts/fetch-since', { fetchSince: mode === 'since' ? date : null });
-    onDone(r.updated);
+    const r = await put<{ startAt: string | null; mailboxes: number }>('/api/admin/external-accounts/start-date', { startAt: mode === 'since' ? date : null });
+    onDone(r.startAt ? `PostMaster start date saved: ${showSince(r.startAt)}. ${r.mailboxes} mailbox(es) are checked again now.` : `All mail at the provider will be downloaded. ${r.mailboxes} mailbox(es) are checked again now.`);
   });
   return (
     <Modal
       open
-      title="Start date for all mailboxes"
+      title="PostMaster start date"
       onClose={onClose}
       footer={
         <>
@@ -96,25 +99,25 @@ function StartDateModal({ count, onClose, onDone }: { count: number; onClose: ()
             Cancel
           </Button>
           <Button busy={apply.busy} disabled={mode === 'since' && !date} onClick={() => void apply.run()}>
-            Apply to {count} mailbox{count === 1 ? '' : 'es'}
+            Save
           </Button>
         </>
       }
     >
       <ErrorBanner error={apply.error} />
       <p className="text-sm text-slate-600">
-        Moving the office from another mail server (such as QLC PostMaster), where the PCs already hold the old mail? Set the switch-over date. PostMaster then downloads only mail received on or after it, so Outlook does
-        not get the old mail again.
+        The moment PostMaster takes over the mail. External mail received from then on is downloaded; older mail stays at the provider and in the PCs&apos; existing Outlook (for example after moving from
+        QLC PostMaster), so nobody gets it twice. After this date PostMaster works as usual. Applies to every mailbox that has no date of its own.
       </p>
-      <Field label="Download">
+      <Field label="Download external mail">
         <Select value={mode} onChange={(e) => setMode(e.target.value as 'since' | 'all')}>
-          <option value="since">Mail received from a date</option>
-          <option value="all">All mail at the provider</option>
+          <option value="since">Received from a date and time</option>
+          <option value="all">All mail already at the provider</option>
         </Select>
       </Field>
       {mode === 'since' && (
-        <Field label="Received on or after" hint="Older mail stays at the provider untouched: never downloaded, never deleted.">
-          <Input type="date" value={date} max={todayIso()} onChange={(e) => setDate(e.target.value)} />
+        <Field label="Received on or after" hint="Older mail is never downloaded and never deleted. Downloaded mail keeps its original date and time.">
+          <Input type="datetime-local" value={date} max={nowLocal()} onChange={(e) => setDate(e.target.value)} />
         </Field>
       )}
     </Modal>
@@ -147,8 +150,8 @@ function AccountModal({ acc, presets, defaultUserId, onClose, onSaved }: { acc: 
     useIdle: x ? Boolean(x.useIdle) : true,
     leavePolicy: x?.leavePolicy ?? ('keep_days' as Account['leavePolicy']),
     keepDays: String(x?.keepDays ?? 14),
-    fetchMode: x?.fetchSince ? 'since' : 'all',
-    fetchSince: x?.fetchSince ?? todayIso(),
+    fetchMode: (x?.fetchSince ? 'since' : 'global') as 'global' | 'since',
+    fetchSince: x?.fetchSince ?? nowLocal(),
     isEnabled: x ? Boolean(x.isEnabled) : true,
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
@@ -301,15 +304,15 @@ function AccountModal({ acc, presets, defaultUserId, onClose, onSaved }: { acc: 
             <Input type="number" min={1} value={f.keepDays} onChange={(e) => set('keepDays', e.target.value)} />
           </Field>
         )}
-        <Field label="Download mail received" hint="Moving from another mail server (e.g. QLC PostMaster)? Choose the switch-over date, so mail the PCs already have is not downloaded again.">
-          <Select value={f.fetchMode} onChange={(e) => set('fetchMode', e.target.value as 'all' | 'since')}>
-            <option value="all">All mail at the provider</option>
-            <option value="since">From a date</option>
+        <Field label="Download mail received" hint="Usually the PostMaster start date (set at the top of this page). Choose a date only for a mailbox that should start differently.">
+          <Select value={f.fetchMode} onChange={(e) => set('fetchMode', e.target.value as 'global' | 'since')}>
+            <option value="global">From the PostMaster start date</option>
+            <option value="since">From a date and time for this mailbox</option>
           </Select>
         </Field>
         {f.fetchMode === 'since' && (
-          <Field label="From (received on or after)" hint="Older mail stays at the provider untouched; it is never downloaded or deleted.">
-            <Input type="date" value={f.fetchSince} max={todayIso()} onChange={(e) => set('fetchSince', e.target.value)} />
+          <Field label="Received on or after (date and time)" hint="Older mail stays at the provider untouched; it is never downloaded or deleted.">
+            <Input type="datetime-local" value={f.fetchSince} max={nowLocal()} onChange={(e) => set('fetchSince', e.target.value)} />
           </Field>
         )}
       </div>
@@ -361,6 +364,7 @@ export function ExternalPage() {
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
   const [startDate, setStartDate] = useState(false);
   const [startNote, setStartNote] = useState<string | null>(null);
+  const startInfo = useResource(() => get<{ startAt: string | null; mailboxesWithOwnDate: number }>('/api/admin/external-accounts/start-date'));
   const [history, setHistory] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [ask, confirmNode] = useConfirm();
@@ -386,15 +390,29 @@ export function ExternalPage() {
         description="Provider mailboxes (Hostinger, GoDaddy, Zoho, cPanel…) fetched into each employee's office mailbox."
         actions={
           <>
-            {(list.data?.items.length ?? 0) > 0 && (
-              <Button variant="secondary" onClick={() => setStartDate(true)}>
-                Start date for all…
-              </Button>
-            )}
             <Button onClick={() => setEditing('new')}>Connect mailbox</Button>
           </>
         }
       />
+      {startInfo.data && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-white px-4 py-3 text-sm shadow-sm ring-1 ring-slate-200">
+          <div className="min-w-0 flex-1">
+            <span className="font-medium text-slate-900">PostMaster start date: </span>
+            {startInfo.data.startAt ? (
+              <>
+                {showSince(startInfo.data.startAt)}
+                <span className="text-slate-500"> · external mail received before this is not downloaded</span>
+              </>
+            ) : (
+              <span>all mail already at the provider is downloaded</span>
+            )}
+            {startInfo.data.mailboxesWithOwnDate > 0 && <span className="text-slate-500"> · {startInfo.data.mailboxesWithOwnDate} mailbox(es) use their own date</span>}
+          </div>
+          <Button variant="secondary" onClick={() => setStartDate(true)}>
+            Change
+          </Button>
+        </div>
+      )}
       {startNote && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-200">{startNote}</div>}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Badge color="green">{(s.idle ?? 0) + (s.idling ?? 0)} OK</Badge>
@@ -423,7 +441,7 @@ export function ExternalPage() {
                     <span className="uppercase">{a.protocol}</span> · {a.host}
                     {a.label && ` · ${a.label}`}
                   </div>
-                  {a.fetchSince && <div className="text-xs text-slate-500">Mail from {new Date(`${a.fetchSince}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>}
+                  {a.fetchSince && <div className="text-xs text-slate-500">Own start: {showSince(a.fetchSince)}</div>}
                 </Td>
                 <Td className="max-w-xs">
                   <StatusBadge a={a} />
@@ -467,13 +485,14 @@ export function ExternalPage() {
           </Table>
         )}
       </Card>
-      {startDate && (
+      {startDate && startInfo.data && (
         <StartDateModal
-          count={list.data?.items.length ?? 0}
+          current={startInfo.data.startAt}
           onClose={() => setStartDate(false)}
-          onDone={(n) => {
+          onDone={(msg) => {
             setStartDate(false);
-            setStartNote(`Start date saved for ${n} mailbox${n === 1 ? '' : 'es'}. They are being checked now.`);
+            setStartNote(msg);
+            startInfo.reload();
             list.reload();
           }}
         />

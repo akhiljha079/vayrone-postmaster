@@ -94,26 +94,30 @@ describe.skipIf(!dbConfig())('external accounts admin API', () => {
     maxExt = null;
   });
 
-  it('"download mail received from": saved, shown, re-checks skipped mail when changed, and settable for all at once', async () => {
-    const id = (await a.post('/api/admin/external-accounts', body({ fetchSince: '2026-10-01' }))).json().id;
+  it('"download mail received from": saved, shown, re-checks skipped mail when changed, and PostMaster start date for the rest', async () => {
+    const id = (await a.post('/api/admin/external-accounts', body({ fetchSince: '2026-10-01T10:30' }))).json().id;
     const get = async () => (await a.get(`/api/admin/external-accounts/${id}`)).json();
-    expect((await get()).fetchSince).toBe('2026-10-01');
-    expect((await a.post('/api/admin/external-accounts', body({ fetchSince: '1 Oct' }))).statusCode).toBe(400);
+    expect((await get()).fetchSince).toBe('2026-10-01T10:30');
+    expect((await a.post('/api/admin/external-accounts', body({ fetchSince: '2026-13-45T99:99' }))).statusCode).toBe(400);
     // Mail skipped under the old date is looked at again after a change.
     await dbm.exec(ctx.db, 'INSERT INTO external_seen (account_id, remote_key_hash, remote_key, first_seen_at, skipped) VALUES (?, UNHEX(SHA2(?, 256)), ?, NOW(3), 1)', [id, `k${id}`, `pop3:k${id}`]);
     expect((await a.patch(`/api/admin/external-accounts/${id}`, { fetchSince: '2026-09-01' })).statusCode).toBe(200);
-    expect((await get()).fetchSince).toBe('2026-09-01');
+    expect((await get()).fetchSince).toBe('2026-09-01T00:00'); // a date alone means midnight
     expect(Number((await dbm.one<{ n: number }>(ctx.db, 'SELECT COUNT(*) n FROM external_seen WHERE account_id = ? AND skipped = 1', [id]))!.n)).toBe(0);
     // Saving other settings does not touch the date.
     await a.patch(`/api/admin/external-accounts/${id}`, { intervalSec: 60 });
-    expect((await get()).fetchSince).toBe('2026-09-01');
-    // One date for every mailbox (moving a whole office), and back to "all mail".
-    const all = (await a.post('/api/admin/external-accounts/fetch-since', { fetchSince: '2026-10-08' })).json();
-    expect(all.updated).toBeGreaterThanOrEqual(1);
-    const list = (await a.get('/api/admin/external-accounts')).json().items as { fetchSince: string | null }[];
-    expect(list.every((x) => x.fetchSince === '2026-10-08')).toBe(true);
-    await a.post('/api/admin/external-accounts/fetch-since', { fetchSince: null, accountIds: [id] });
+    expect((await get()).fetchSince).toBe('2026-09-01T00:00');
+    // PostMaster's start date: for every mailbox without its own date.
+    expect((await a.get('/api/admin/external-accounts/start-date')).json()).toMatchObject({ startAt: null });
+    const saved = (await a.put('/api/admin/external-accounts/start-date', { startAt: '2026-10-08T09:15' })).json();
+    expect(saved.startAt).toBe('2026-10-08T09:15');
+    expect((await a.get('/api/admin/external-accounts/start-date')).json()).toMatchObject({ startAt: '2026-10-08T09:15', mailboxesWithOwnDate: 1 });
+    expect((await a.put('/api/admin/external-accounts/start-date', { startAt: 'yesterday' })).statusCode).toBe(400);
+    // This mailbox goes back to following the PostMaster date.
+    await a.patch(`/api/admin/external-accounts/${id}`, { fetchSince: null });
     expect((await get()).fetchSince).toBeNull();
+    expect((await a.get('/api/admin/external-accounts/start-date')).json().mailboxesWithOwnDate).toBe(0);
+    await a.put('/api/admin/external-accounts/start-date', { startAt: null });
   });
 
   it('serves provider presets', async () => {

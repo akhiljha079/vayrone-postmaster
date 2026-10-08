@@ -8,7 +8,7 @@
 import { statfs } from 'node:fs/promises';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import {
+import { fetchStartDate,
   APP_VERSION,
   ARCHIVE_DEFAULTS,
   checkTarget,
@@ -50,6 +50,13 @@ const isLoopback = (ip: string) => ip === '127.0.0.1' || ip === '::1' || ip === 
 
 export async function setupDone(ctx: CoreContext): Promise<boolean> {
   return Boolean((await one<{ completed_at: Date | null }>(ctx.db, 'SELECT completed_at FROM setup_state WHERE id = 1'))?.completed_at);
+}
+
+/** YYYY-MM-DDTHH:MM on this server's clock (a datetime-local value). */
+function localText(d: Date | null): string | null {
+  if (!d) return null;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export function setupRoutes(ctx: CoreContext, license: LicenseManager | null) {
@@ -126,6 +133,8 @@ export function setupRoutes(ctx: CoreContext, license: LicenseManager | null) {
           archiveDays: policy.retentionDays,
           archiveLicensed: ctx.license.feature('archive'),
           trashDays: trash?.keep_days ?? null,
+          // Absent until chosen, so the wizard can default to "now" on a fresh install.
+          ...('startAt' in (await ctx.settings.get<Record<string, unknown>>('fetch', 'policy', {})) ? { fetchStartAt: localText(await fetchStartDate(ctx)) } : {}),
         },
       };
     });
@@ -314,8 +323,19 @@ export function setupRoutes(ctx: CoreContext, license: LicenseManager | null) {
           archiveEnabled: z.boolean(),
           archiveDays: z.number().int().min(1).max(36500).nullable(),
           trashDays: z.number().int().min(1).max(3650).nullable(),
+          /** PostMaster's start date (server local "YYYY-MM-DDTHH:MM"); null = all mail at the provider. */
+          fetchStartAt: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Use a date and time like 2026-10-08T10:30')
+            .nullable()
+            .optional(),
         })
         .parse(req.body);
+      if (b.fetchStartAt !== undefined) {
+        const at = b.fetchStartAt ? new Date(`${b.fetchStartAt}:00`) : null;
+        if (at && Number.isNaN(at.getTime())) throw badRequest('Start date: not a valid date');
+        await ctx.settings.set('fetch', 'policy', { startAt: at?.toISOString() ?? null }, null);
+      }
       // Backup: weekly full on Sunday, incremental on the other nights.
       const name = 'Setup: nightly backup';
       const t = await one<BackupTargetRow>(ctx.db, 'SELECT * FROM backup_targets WHERE name = ?', [name]);

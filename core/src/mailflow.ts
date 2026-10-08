@@ -54,6 +54,8 @@ export interface InboundRequest {
   skipJournal?: boolean;
   /** Already checked (LAN submission) or released from quarantine. */
   skipFilter?: boolean;
+  /** Fetched mail: when it reached the provider. Becomes the received date mail programs show. */
+  receivedAt?: Date | null;
 }
 
 export interface SubmissionRequest {
@@ -426,12 +428,13 @@ export class MailFlow {
           externalAccountId: r.externalAccountId ?? null,
           clientIp: r.clientIp ?? null,
           ignoreQuota: r.ignoreQuota ?? false,
+          internalDate: r.receivedAt ?? null,
         });
         outcomes.push(o!);
         if (o!.status !== 'delivered') continue; // duplicate / over quota / failed: no side effects
         for (const path of plan.copies) {
           const cf = await this.ensureFolder(user.id, path);
-          if (cf !== o!.folderId) await this.delivery.deliver({ message: m, targets: [{ userId: user.id, folderId: cf, flags: plan.flags, ...(variant ? { message: variant } : {}) }], origin: 'rule', envelopeFrom: r.envelopeFrom, dedup: false, ignoreQuota: true });
+          if (cf !== o!.folderId) await this.delivery.deliver({ message: m, targets: [{ userId: user.id, folderId: cf, flags: plan.flags, ...(variant ? { message: variant } : {}) }], origin: 'rule', envelopeFrom: r.envelopeFrom, dedup: false, ignoreQuota: true, internalDate: r.receivedAt ?? null });
         }
       } else {
         const dup = await this.delivery.recordOnly(user.id, m);

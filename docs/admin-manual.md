@@ -50,18 +50,19 @@ Each employee's mailbox at the provider (Zoho, Hostinger, GoDaddy, cPanel, Micro
 | Folders | IMAP only: which provider folders to fetch |
 | Interval | How often to check; with IMAP IDLE, new mail arrives within seconds |
 | Leave on server | Keep mail at the provider, delete it after fetching, or keep it N days |
-| Download mail received | *All mail at the provider*, or *From a date*: only mail that reached the provider on or after that date is downloaded |
+| Download mail received | *From the PostMaster start date* (normal), or a date and time for this mailbox only |
 
 Use **Test** to check a connection before saving. The list shows each account's live status. *Wrong password* and *mailbox full* also raise alerts.
 
 **Duplicates are suppressed.** A message fetched twice (for example after a provider-side restore) is delivered only once.
 
-**Moving from another mail server (for example QLC PostMaster).**
-- **Why a start date:** the PCs already hold the old mail, usually in Outlook's PST, and the provider often still keeps a copy of it. Without a start date, PostMaster downloads all of that old mail, and Outlook shows it a second time.
-- **One date for everyone:** click **Start date for all…** at the top of *External mailboxes* and choose the switch-over day. Each mailbox's *Edit* form has the same choice.
-- **Older mail is left alone:** it stays at the provider, untouched. It is never downloaded, and *After download → delete* never removes it, because PostMaster has no copy.
-- **Moving the date earlier later on:** the mail that now falls in the range is downloaded once, without duplicates.
-- **The old history:** it stays in Outlook's old account or PST. Drag folders into the new account if they should live on the server and in the archive.
+**PostMaster start date.**
+- **What it is:** the moment PostMaster takes over the mail, shown at the top of *External mailboxes* (*Change* to edit it). The setup wizard sets it to the moment of setup.
+- **Before the start date:** external mail received earlier is never downloaded. It stays at the provider and in the PCs' existing Outlook (for example after moving from QLC PostMaster), so nobody gets it twice, and *After download → delete* never removes it.
+- **After the start date:** PostMaster works as usual. Every downloaded email keeps its **original date and time**, so Outlook shows when it really arrived, not when PostMaster fetched it.
+- **Choosing *All mail already at the provider*:** downloads everything that is there.
+- **Moving the date earlier:** the mail now in range is downloaded once, without duplicates.
+- **A different start for one mailbox:** *Edit → Download mail received → From a date and time for this mailbox*.
 
 ## 5. Outgoing mail: SMTP relay and queue
 

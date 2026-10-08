@@ -60,6 +60,8 @@ interface SetupState {
     archiveDays: number | null;
     archiveLicensed: boolean;
     trashDays: number | null;
+    /** PostMaster start date; absent = not chosen yet, null = all mail at the provider. */
+    fetchStartAt?: string | null;
   };
 }
 
@@ -645,6 +647,9 @@ function StorageStep({ s, onDone }: { s: SetupState; onDone: () => void }) {
     archiveEnabled: st.archiveEnabled,
     archiveYears: st.archiveDays === null ? 'forever' : String(Math.round(st.archiveDays / 365)),
     trashDays: st.trashDays === null ? '30' : String(st.trashDays),
+    // PostMaster's start date: defaults to now, the moment PostMaster takes over the mail.
+    fetchFrom: (st.fetchStartAt === undefined || st.fetchStartAt ? 'date' : 'all') as 'date' | 'all',
+    fetchStartAt: st.fetchStartAt ?? nowLocal(),
   });
   const save = useAction(async () => {
     await setupApi('PUT', '/storage', {
@@ -654,6 +659,7 @@ function StorageStep({ s, onDone }: { s: SetupState; onDone: () => void }) {
       archiveEnabled: f.archiveEnabled,
       archiveDays: f.archiveYears === 'forever' ? null : Number(f.archiveYears) * 365,
       trashDays: f.trashDays === 'never' ? null : Number(f.trashDays),
+      fetchStartAt: f.fetchFrom === 'date' ? f.fetchStartAt : null,
     });
     onDone();
   });
@@ -707,9 +713,36 @@ function StorageStep({ s, onDone }: { s: SetupState; onDone: () => void }) {
           </Select>
         </Field>
       </div>
-      <StepFooter busy={save.busy} disabled={f.backup && !f.backupPath.trim()} onSave={() => void save.run()} />
+      <div className="mt-4 rounded-md px-3 py-3 ring-1 ring-slate-200">
+        <div className="text-sm font-medium text-slate-900">PostMaster start date</div>
+        <p className="mb-2 text-xs text-slate-500">
+          External mail received from this moment on is downloaded into the office mailboxes. Older mail stays at the provider and in the PCs&apos; existing Outlook (for example when moving from
+          another mail server such as QLC PostMaster), so nobody gets it twice. You can change this later in Admin → External mailboxes.
+        </p>
+        <div className="grid gap-x-4 sm:grid-cols-2">
+          <Field label="Download external mail">
+            <Select value={f.fetchFrom} onChange={(e) => setF({ ...f, fetchFrom: e.target.value as 'date' | 'all' })}>
+              <option value="date">Received from a date and time</option>
+              <option value="all">All mail already at the provider</option>
+            </Select>
+          </Field>
+          {f.fetchFrom === 'date' && (
+            <Field label="Received on or after">
+              <Input type="datetime-local" value={f.fetchStartAt} onChange={(e) => setF({ ...f, fetchStartAt: e.target.value })} />
+            </Field>
+          )}
+        </div>
+      </div>
+      <StepFooter busy={save.busy} disabled={(f.backup && !f.backupPath.trim()) || (f.fetchFrom === 'date' && !f.fetchStartAt)} onSave={() => void save.run()} />
     </Card>
   );
+}
+
+/** Now as YYYY-MM-DDTHH:MM (datetime-local) on this computer's clock. */
+function nowLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 // ---------------------------------------------------------------- 8. summary

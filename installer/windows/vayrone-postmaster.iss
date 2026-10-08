@@ -388,6 +388,13 @@ begin
   RunHidden(App + '\service\VayronePostMaster.exe', 'install', 'install core');
   RunHidden(App + '\service\VayronePostMasterWorker.exe', 'install', 'install worker');
   RunHidden(App + '\service\VayronePostMasterUpdater.exe', 'install', 'install updater');
+  // Run on startup, every time (also on upgrades): the database first, the mail services
+  // once Windows has finished booting (network ready); any crash restarts the service.
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterDB start= auto', 'autostart db');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'failure VayronePostMasterDB reset= 3600 actions= restart/5000/restart/10000/restart/30000', 'recovery db');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMaster start= delayed-auto', 'autostart core');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterWorker start= delayed-auto', 'autostart worker');
+  RunHidden(ExpandConstant('{sys}\sc.exe'), 'config VayronePostMasterUpdater start= delayed-auto', 'autostart updater');
   RunHidden(App + '\service\VayronePostMaster.exe', 'start', 'start core');
   RunHidden(App + '\service\VayronePostMasterWorker.exe', 'start', 'start worker');
   RunHidden(App + '\service\VayronePostMasterUpdater.exe', 'start', 'start updater');

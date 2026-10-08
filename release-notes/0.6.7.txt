@@ -1,0 +1,12 @@
+Vayrone PostMaster 0.6.7
+
+New
+- PostMaster start date: the moment PostMaster takes over the mail (date and time). External mail
+  received before it is never downloaded: it stays at the provider and in the PCs' existing Outlook,
+  so nobody gets old mail twice (e.g. when moving from QLC PostMaster). After it, everything works as
+  usual. Set in the setup wizard (default: the moment of setup) and in Admin > External mailboxes.
+- Downloaded mail keeps its original date and time, so Outlook shows when it really arrived.
+
+Improved
+- PostMaster always starts with Windows (after boot completes, with the database first), and a
+  stopped database service is restarted automatically. "Vayrone PostMaster status" shows it.
