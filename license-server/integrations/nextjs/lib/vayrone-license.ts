@@ -211,6 +211,16 @@ export function createVlsClient(o: VlsOptions) {
     /** Health of every activated client server, worst first. */
     servers: () => call<{ items: ClientServer[]; summary: Record<ServerState, number>; checkedAt: string }>('GET', '/servers'),
 
+    /** Reads a request file without issuing anything: which licence and machine it is for. */
+    inspectOffline: (requestText: string) =>
+      call<{
+        request: { kind: 'activation' | 'revalidation'; machineId: string; hostname: string; version: string; activeUsers: number; createdAt: string };
+        license: { id: number; licenseId: string; company: string; status: string; maxUsers: number; expiresAt: string | null; maxActivations: number } | null;
+        activeOn: { id: number; machineId: string; hostname: string | null }[];
+        sameMachine: boolean;
+        overLimit: boolean;
+      }>('POST', '/offline/inspect', { request: requestText }),
+
     /** Offline servers: the client's request file (.vreq) in, the licence file (.vlic) out. */
     issueOfflineLicense: (requestText: string) => call<{ license: string; fileName: string; licenseId: string; activationId: string; client: string }>('POST', '/offline/issue', { request: requestText }),
   };
