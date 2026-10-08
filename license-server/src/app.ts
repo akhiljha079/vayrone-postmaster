@@ -16,6 +16,7 @@ import { catalogRoutes } from './routes/catalog.js';
 import { licenseRoutes } from './routes/licenses.js';
 import { reportRoutes } from './routes/reports.js';
 import { settingsRoutes } from './routes/settings.js';
+import { serverRoutes } from './routes/servers.js';
 
 export async function buildApp(ctx: LsContext, opts: { logger?: FastifyServerOptions['logger'] } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: opts.logger ?? false, trustProxy: ctx.config.trustProxy, bodyLimit: 512 * 1024 });
@@ -30,7 +31,7 @@ export async function buildApp(ctx: LsContext, opts: { logger?: FastifyServerOpt
   app.get('/api/health', async () => ({ ok: true }));
   await app.register(productRoutes(ctx), { prefix: '/api/v1' });
   await app.register(authRoutes(ctx), { prefix: '/api/auth' });
-  for (const r of [clientRoutes, catalogRoutes, licenseRoutes, reportRoutes, settingsRoutes]) await app.register(r(ctx), { prefix: '/api' });
+  for (const r of [clientRoutes, catalogRoutes, licenseRoutes, reportRoutes, settingsRoutes, serverRoutes]) await app.register(r(ctx), { prefix: '/api' });
 
   const webRoot = ctx.config.webRoot ? resolve(ctx.config.webRoot) : null;
   if (webRoot && existsSync(join(webRoot, 'index.html'))) {

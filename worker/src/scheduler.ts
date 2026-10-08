@@ -29,6 +29,9 @@ import {
   runMonitorChecks,
   notifyAlerts,
   purgeQuarantine,
+  collectHealth,
+  healthReport,
+  monitorSettings,
 } from '@vpm/core';
 import { checkForUpdates, trustedKeys, type LicenseManager } from '@vpm/license-client';
 import type { JobHandler } from './jobs.js';
@@ -165,11 +168,27 @@ export class Scheduler {
     private readonly license: LicenseManager | null = null,
   ) {}
 
-  /** Online licences call the License Server when due (daily; hourly retries after a failure). */
+  /**
+   * Online licences call the License Server when due (daily; hourly retries after a failure),
+   * with a short health report; in between, the health report alone goes out hourly so Vayrone's
+   * overview of client servers stays current.
+   */
   async licenseHeartbeat(): Promise<void> {
     if (!this.license) return;
+    const report = async () => {
+      try {
+        return healthReport(await collectHealth(this.ctx), await monitorSettings(this.ctx));
+      } catch (err) {
+        this.ctx.log.warn({ err }, 'health report could not be collected');
+        return null;
+      }
+    };
     try {
-      if (await this.license.heartbeatDue()) await this.license.heartbeat();
+      if (await this.license.heartbeatDue()) await this.license.heartbeat(await report());
+      else if (this.license.healthReportDue()) {
+        const r = await report();
+        if (r) await this.license.reportHealth(r);
+      }
     } catch (err) {
       this.ctx.log.error({ err }, 'licence heartbeat failed');
     }

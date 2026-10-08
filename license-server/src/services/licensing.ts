@@ -39,7 +39,28 @@ const Site = z
 const Product = z.object({ version: z.string().max(32), installId: z.string().max(64), hostname: z.string().max(253), site: Site });
 const Usage = z.object({ activeUsers: z.number().int().min(0).max(1_000_000), externalAccounts: z.number().int().min(0).max(1_000_000) });
 export const ActivateBody = z.object({ key: z.string().max(60), machine: Machine, product: Product, usage: Usage });
-export const HeartbeatBody = z.object({ licenseId: z.string().max(32), activationId: z.string().max(32), token: z.string().max(100), machine: Machine, product: Product, usage: Usage });
+/** Health report from a client server (PostMaster core/src/monitor.ts healthReport). */
+const N = (max = 1e12) => z.number().min(-1e6).max(max);
+export const Health = z.object({
+  at: z.string().max(40),
+  status: z.enum(['ok', 'warning', 'problem']),
+  issues: z.array(z.object({ level: z.enum(['problem', 'warning']), text: z.string().max(200) })).max(20),
+  version: z.string().max(32),
+  uptimeHours: N(),
+  diskFreePct: N(100).nullable(),
+  diskFreeGb: N().nullable(),
+  dbOk: z.boolean(),
+  mailboxes: N(),
+  queue: z.object({ waiting: N(), oldestMinutes: N().nullable(), failed24h: N(), sent24h: N() }),
+  fetch: z.object({ accounts: N(), failing: N(), authFailed: N() }),
+  backup: z.object({ lastOkAt: z.string().max(40).nullable(), ageHours: N().nullable(), scheduled: z.boolean() }),
+  certDaysLeft: N().nullable(),
+  alerts: z.object({ critical: N(), warning: N() }),
+  licenseMode: z.string().max(20),
+});
+export type HealthReport = z.infer<typeof Health>;
+export const HeartbeatBody = z.object({ licenseId: z.string().max(32), activationId: z.string().max(32), token: z.string().max(100), machine: Machine, product: Product, usage: Usage, health: Health.optional() });
+export const HealthBody = z.object({ licenseId: z.string().max(32), activationId: z.string().max(32), token: z.string().max(100), health: Health });
 export const DeactivateBody = z.object({ licenseId: z.string().max(32), activationId: z.string().max(32), token: z.string().max(100) });
 
 export interface LicenseRow {
@@ -244,6 +265,7 @@ export class Licensing {
         active_users: b.usage.activeUsers,
         external_accounts: b.usage.externalAccounts,
         ...(b.product.site ? { site: JSON.stringify(b.product.site) } : {}),
+        ...(b.health ? { health: JSON.stringify(b.health), health_at: now } : {}),
       };
       if (m.ok) {
         // Follow gradual hardware upgrades (one part at a time).
@@ -258,6 +280,16 @@ export class Licensing {
       const fresh = (await one<ActivationRow>(c, 'SELECT * FROM activations WHERE id = ?', [act.id]))!;
       return { license: await this.issue(c, lic, fresh), serverTime: now.toISOString() };
     });
+  }
+
+  /** Hourly health report between heartbeats. Only the activation's own token may report. */
+  async reportHealth(body: unknown, ip: string | null): Promise<{ ok: true }> {
+    const b = HealthBody.parse(body);
+    const { act } = await this.authActivation(this.db, b.licenseId, b.activationId, b.token);
+    if (act.status !== 'active') throw new ApiFail(409, 'NOT_ACTIVE', 'This activation is no longer active');
+    const now = this.now();
+    await exec(this.db, 'UPDATE activations SET health = ?, health_at = ?, last_seen_at = ?, last_ip = ?, product_version = ? WHERE id = ?', [JSON.stringify(b.health), now, now, ip, b.health.version, act.id]);
+    return { ok: true };
   }
 
   async deactivate(body: unknown, ip: string | null): Promise<DeactivateResponse> {

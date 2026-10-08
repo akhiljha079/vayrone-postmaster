@@ -1,6 +1,9 @@
 // REST protocol between the product and the Vayrone License Server (/api/v1).
 // Pure types, shared by both sides.
+import type { HealthReport } from '@vpm/core';
 import type { Components } from './format.js';
+
+export type { HealthReport };
 
 export interface MachineInfo {
   id: string;
@@ -47,6 +50,8 @@ export interface HeartbeatRequest {
   machine: MachineInfo;
   product: ProductInfo;
   usage: UsageInfo;
+  /** Server health for Vayrone's overview of client servers (optional; newer versions). */
+  health?: HealthReport;
 }
 export interface HeartbeatResponse {
   /** Refreshed licence (new checkBy, current entitlements after renewals/upgrades). */
@@ -64,6 +69,14 @@ export interface DeactivateRequest {
 }
 export interface DeactivateResponse {
   revocation: string;
+}
+
+/** POST /api/v1/health: hourly health report between the daily heartbeats. */
+export interface HealthReportRequest {
+  licenseId: string;
+  activationId: string;
+  token: string;
+  health: HealthReport;
 }
 
 /** POST /api/v1/offline — portal processing of an activation request file (text body). */

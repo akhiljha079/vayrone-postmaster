@@ -96,6 +96,45 @@ export interface LicenseDetail {
   renewals: { id: number; kind: string; periodFrom: string; periodTo: string; users: number; amount: number; invoiceRef: string | null; createdAt: string }[];
 }
 
+export type ServerState = 'problem' | 'silent' | 'warning' | 'no_data' | 'ok' | 'offline';
+export interface ServerHealth {
+  at: string;
+  status: 'ok' | 'warning' | 'problem';
+  issues: { level: 'problem' | 'warning'; text: string }[];
+  version: string;
+  uptimeHours: number;
+  diskFreePct: number | null;
+  diskFreeGb: number | null;
+  dbOk: boolean;
+  mailboxes: number;
+  queue: { waiting: number; oldestMinutes: number | null; failed24h: number; sent24h: number };
+  fetch: { accounts: number; failing: number; authFailed: number };
+  backup: { lastOkAt: string | null; ageHours: number | null; scheduled: boolean };
+  certDaysLeft: number | null;
+  alerts: { critical: number; warning: number };
+  licenseMode: string;
+}
+/** One activated client server (License Server → Client servers). */
+export interface ClientServer {
+  id: number;
+  licenseRowId: number;
+  licenseId: string;
+  company: string;
+  city: string | null;
+  phone: string | null;
+  plan: string;
+  hostname: string | null;
+  version: string | null;
+  mode: string;
+  activeUsers: number | null;
+  maxUsers: number;
+  lastSeenAt: string | null;
+  healthAt: string | null;
+  health: ServerHealth | null;
+  reseller: string | null;
+  state: ServerState;
+}
+
 export interface CreateLicenseInput {
   clientId: number;
   /** Plan id, or use planCode with createLicense's helper. */
@@ -168,6 +207,9 @@ export function createVlsClient(o: VlsOptions) {
     setLicenseStatus: (id: number, status: 'active' | 'suspended' | 'revoked', reason?: string) => call<{ ok: true }>('POST', `/licenses/${id}/status`, { status, reason }),
     /** Frees the licence for a new server (hardware change). */
     releaseActivation: (activationId: number, reason: string) => call<{ ok: true }>('POST', `/activations/${activationId}/release`, { reason }),
+
+    /** Health of every activated client server, worst first. */
+    servers: () => call<{ items: ClientServer[]; summary: Record<ServerState, number>; checkedAt: string }>('GET', '/servers'),
 
     /** Offline servers: the client's request file (.vreq) in, the licence file (.vlic) out. */
     issueOfflineLicense: (requestText: string) => call<{ license: string; fileName: string; licenseId: string; activationId: string; client: string }>('POST', '/offline/issue', { request: requestText }),

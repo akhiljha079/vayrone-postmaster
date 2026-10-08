@@ -13,9 +13,11 @@ import { OfflinePage, PortalPage } from './pages/Offline';
 import { PlansPage } from './pages/Plans';
 import { PartnersPage } from './pages/Partners';
 import { SettingsPage } from './pages/Settings';
+import { ServersPage } from './pages/Servers';
 
 const NAV: { to: string; label: string; roles?: Me['user']['role'][] }[] = [
   { to: '/', label: 'Dashboard' },
+  { to: '/servers', label: 'Client servers' },
   { to: '/licenses', label: 'Licences' },
   { to: '/clients', label: 'Clients' },
   { to: '/offline', label: 'Offline files' },
@@ -78,6 +80,7 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/portal" element={<PortalPage />} />
       <Route path="/" element={<Private><DashboardPage /></Private>} />
+      <Route path="/servers" element={<Private><ServersPage /></Private>} />
       <Route path="/licenses" element={<Private><LicensesPage /></Private>} />
       <Route path="/licenses/:id" element={<Private><LicenseDetailPage /></Private>} />
       <Route path="/clients" element={<Private><ClientsPage /></Private>} />

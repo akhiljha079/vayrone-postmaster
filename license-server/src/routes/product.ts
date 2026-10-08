@@ -9,6 +9,7 @@ export function productRoutes(ctx: LsContext) {
     const limit = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 hour' } } });
     app.post('/activate', limit(30), async (req) => ctx.licensing.activate(req.body, req.ip));
     app.post('/heartbeat', limit(120), async (req) => ctx.licensing.heartbeat(req.body, req.ip));
+    app.post('/health', limit(60), async (req) => ctx.licensing.reportHealth(req.body, req.ip));
     app.post('/deactivate', limit(30), async (req) => ctx.licensing.deactivate(req.body, req.ip));
     // Customer self-service: upload the request file from an offline server, get the licence file.
     app.post('/offline', limit(20), async (req) => {

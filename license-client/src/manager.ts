@@ -21,7 +21,7 @@ import { collectFingerprint, matchFingerprint, type Fingerprint } from './finger
 import { evaluate, GRACE_DAYS, type Evaluation, type LicenseStatus } from './evaluate.js';
 import { appRoot, checkIntegrity, type IntegrityResult } from './integrity.js';
 import { trustedKeys } from './keys.js';
-import type { ActivateResponse, ApiError, DeactivateResponse, HeartbeatResponse, ProductInfo, UsageInfo } from './protocol.js';
+import type { ActivateResponse, ApiError, DeactivateResponse, HealthReport, HealthReportRequest, HeartbeatResponse, ProductInfo, UsageInfo } from './protocol.js';
 
 const { exec, one, tx } = dbm;
 
@@ -485,7 +485,32 @@ export class LicenseManager implements LicenseGate {
     return this.now().getTime() - new Date(row.last_heartbeat_at).getTime() >= wait;
   }
 
-  async heartbeat(): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
+  private lastHealthReport = 0;
+
+  /** Hourly health report (online licences only), between the daily heartbeats. */
+  healthReportDue(): boolean {
+    return this.now().getTime() - this.lastHealthReport >= 55 * 60_000;
+  }
+
+  /**
+   * Sends the server's health to the License Server (Vayrone's overview of client servers).
+   * Never affects the licence; an older License Server without this endpoint is ignored.
+   */
+  async reportHealth(health: HealthReport): Promise<boolean> {
+    const { license, secret } = await this.current();
+    if (!license || license.activation.mode !== 'online' || !secret.token || secret.activationId !== license.activation.id) return false;
+    this.lastHealthReport = this.now().getTime();
+    try {
+      await this.call('/api/v1/health', { licenseId: license.licenseId, activationId: license.activation.id, token: secret.token, health } satisfies HealthReportRequest);
+      return true;
+    } catch (e) {
+      // An older License Server has no /api/v1/health: not worth a log line every hour.
+      if (!(e instanceof LicenseActionError && /NOT_FOUND|HTTP_404/.test(e.code))) this.deps.log?.warn({ err: (e as Error).message }, 'health report not delivered');
+      return false;
+    }
+  }
+
+  async heartbeat(health?: HealthReport | null): Promise<{ ok: boolean; error?: string; skipped?: boolean }> {
     const { license, secret } = await this.current();
     if (!license || license.activation.mode !== 'online') return { ok: false, skipped: true };
     const now = this.now();
@@ -499,7 +524,9 @@ export class LicenseManager implements LicenseGate {
         machine: { id: fp.machineId, components: fp.components },
         product: await this.product(),
         usage: await this.usage(),
+        ...(health ? { health } : {}),
       });
+      if (health) this.lastHealthReport = now.getTime();
       if (res.revocation) {
         const r = verifyDoc<RevocationPayload>(REVOCATION_FORMAT, res.revocation, this.keys).payload;
         if (r.licenseId === license.licenseId && r.activationId === license.activation.id) {

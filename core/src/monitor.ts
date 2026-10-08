@@ -244,3 +244,73 @@ export function metricsText(h: Health): string {
   g('license_active', 'Licence allows normal operation', h.license.mode === 'active' ? 1 : 0);
   return `${out.join('\n')}\n`;
 }
+
+/**
+ * Short health report a client server sends to the Vayrone License Server (hourly, and with the
+ * daily licence check-in), so Vayrone sees every client's server on one screen. Plain-language
+ * issues, worst first; no mail content, addresses or names.
+ */
+export interface HealthReport {
+  at: string;
+  status: 'ok' | 'warning' | 'problem';
+  issues: { level: 'problem' | 'warning'; text: string }[];
+  version: string;
+  uptimeHours: number;
+  diskFreePct: number | null;
+  diskFreeGb: number | null;
+  dbOk: boolean;
+  mailboxes: number;
+  queue: { waiting: number; oldestMinutes: number | null; failed24h: number; sent24h: number };
+  fetch: { accounts: number; failing: number; authFailed: number };
+  backup: { lastOkAt: string | null; ageHours: number | null; scheduled: boolean };
+  certDaysLeft: number | null;
+  alerts: { critical: number; warning: number };
+  licenseMode: string;
+}
+
+export function healthReport(h: Health, s: MonitorSettings = MONITOR_DEFAULTS): HealthReport {
+  const issues: HealthReport['issues'] = [];
+  const problem = (text: string) => issues.push({ level: 'problem', text });
+  const warning = (text: string) => issues.push({ level: 'warning', text });
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+  if (!h.db.ok) problem('Database not reachable');
+  if (h.disk) {
+    if (h.disk.freePct < s.diskCriticalPct) problem(`Disk almost full: ${h.disk.freePct}% free`);
+    else if (h.disk.freePct < s.diskWarnPct) warning(`Disk getting full: ${h.disk.freePct}% free`);
+  }
+  if (h.fetch.authFailed) problem(`${plural(h.fetch.authFailed, 'external mailbox', 'external mailboxes')}: wrong provider password`);
+  if (h.fetch.failing - h.fetch.authFailed > 0) warning(`${plural(h.fetch.failing - h.fetch.authFailed, 'external mailbox', 'external mailboxes')} failing to fetch`);
+  const waiting = h.queue.queued + h.queue.deferred;
+  if (h.queue.oldestMinutes != null && h.queue.oldestMinutes > s.queueWarnMinutes) warning(`${plural(waiting, 'outgoing mail')} waiting, oldest ${Math.round(h.queue.oldestMinutes)} min`);
+  if (h.queue.held) warning(`${plural(h.queue.held, 'outgoing mail')} on hold`);
+  if (!h.backup.schedules) warning('No backup schedule');
+  else if (h.backup.ageHours == null) problem('No successful backup yet');
+  else if (h.backup.ageHours > 36) problem(`Last good backup ${Math.round(h.backup.ageHours / 24)} day(s) ago`);
+  if (h.tls) {
+    if (h.tls.daysLeft < 0) problem('Server certificate expired');
+    else if (h.tls.daysLeft < s.certWarnDays) warning(`Server certificate expires in ${h.tls.daysLeft} days`);
+  }
+  if (h.license.mode === 'readonly') problem('Licence expired: admin panel is read-only');
+  else if (h.license.mode === 'grace') warning('Licence in grace period');
+  if (h.alerts.critical) problem(`${plural(h.alerts.critical, 'critical alert')} open`);
+  issues.sort((a, b) => (a.level === b.level ? 0 : a.level === 'problem' ? -1 : 1));
+
+  return {
+    at: h.checkedAt,
+    status: issues.some((i) => i.level === 'problem') ? 'problem' : issues.length ? 'warning' : 'ok',
+    issues: issues.slice(0, 20),
+    version: h.version,
+    uptimeHours: Math.round(h.system.uptimeSec / 360) / 10,
+    diskFreePct: h.disk?.freePct ?? null,
+    diskFreeGb: h.disk ? Math.round(h.disk.freeBytes / 1024 ** 3) : null,
+    dbOk: h.db.ok,
+    mailboxes: h.users.mailboxes,
+    queue: { waiting, oldestMinutes: h.queue.oldestMinutes, failed24h: h.queue.failed24h, sent24h: h.queue.sent24h },
+    fetch: { accounts: h.fetch.accounts, failing: h.fetch.failing, authFailed: h.fetch.authFailed },
+    backup: { lastOkAt: h.backup.lastOkAt, ageHours: h.backup.ageHours, scheduled: h.backup.schedules > 0 },
+    certDaysLeft: h.tls?.daysLeft ?? null,
+    alerts: { critical: h.alerts.critical, warning: h.alerts.warning },
+    licenseMode: h.license.mode,
+  };
+}

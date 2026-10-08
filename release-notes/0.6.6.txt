@@ -1,0 +1,7 @@
+Vayrone PostMaster 0.6.6
+
+New
+- Servers with an online licence send a short health report to Vayrone every hour (and with the
+  daily licence check-in): status, disk space, backups, mail queue, external mailbox errors,
+  certificate and licence state. No mail content, addresses or names are sent.
+  Vayrone sees problems early and can help before you notice them.
