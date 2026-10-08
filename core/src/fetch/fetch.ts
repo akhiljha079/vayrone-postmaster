@@ -7,6 +7,9 @@
 //     downloaded again; the per-mailbox dedup ledger catches the rest.
 //   * When the local mailbox is full, the run stops and the mail stays on the
 //     provider — nothing is dropped.
+//   * "Download mail received from <date>" (fetch_since): older provider mail is
+//     remembered as skipped, never downloaded, and never deleted by the
+//     leave-on-server policy (PostMaster never had a copy of it).
 import { createHash } from 'node:crypto';
 import { ImapFlow } from 'imapflow';
 import type { CoreContext } from '../context.js';
@@ -33,6 +36,8 @@ export interface ExternalAccount {
   leave_policy: 'delete' | 'keep' | 'keep_days';
   keep_days: number;
   use_idle: number;
+  /** Only mail that reached the provider on or after this moment is downloaded. */
+  fetch_since?: Date | null;
 }
 
 export interface FetchResult {
@@ -44,6 +49,8 @@ export interface FetchResult {
   remoteBytes: number | null;
   /** More new messages remain on the server (per-run limit reached). */
   more: boolean;
+  /** Older than the account's "download mail received from" date: left alone. */
+  skipped: number;
 }
 
 export interface FetchOptions {
@@ -61,8 +68,9 @@ export class QuotaFullError extends FetchError {
 }
 
 class Run {
-  readonly result: FetchResult = { fetched: 0, duplicates: 0, deletedRemote: 0, bytes: 0, remoteCount: 0, remoteBytes: null, more: false };
+  readonly result: FetchResult = { fetched: 0, duplicates: 0, deletedRemote: 0, bytes: 0, remoteCount: 0, remoteBytes: null, more: false, skipped: 0 };
   private seen = new Map<string, Date>(); // hex hash → first_seen_at
+  private skippedKeys = new Set<string>(); // hex hashes of mail older than fetch_since
   private targetFolderId: number | null = null;
 
   constructor(
@@ -71,12 +79,16 @@ class Run {
   ) {}
 
   async init(): Promise<void> {
-    const r = await rows<{ remote_key_hash: Buffer; first_seen_at: Date }>(
+    const r = await rows<{ remote_key_hash: Buffer; first_seen_at: Date; skipped: number }>(
       this.ctx.db,
-      'SELECT remote_key_hash, first_seen_at FROM external_seen WHERE account_id = ? AND remote_deleted_at IS NULL',
+      'SELECT remote_key_hash, first_seen_at, skipped FROM external_seen WHERE account_id = ? AND remote_deleted_at IS NULL',
       [this.acc.id],
     );
-    for (const x of r) this.seen.set(Buffer.from(x.remote_key_hash).toString('hex'), new Date(x.first_seen_at));
+    for (const x of r) {
+      const h = Buffer.from(x.remote_key_hash).toString('hex');
+      this.seen.set(h, new Date(x.first_seen_at));
+      if (x.skipped) this.skippedKeys.add(h);
+    }
     if (this.acc.target_folder_id) {
       const f = await one<{ id: number }>(this.ctx.db, 'SELECT id FROM folders WHERE id = ? AND user_id = ?', [this.acc.target_folder_id, this.acc.user_id]);
       this.targetFolderId = f?.id ?? null;
@@ -101,6 +113,26 @@ class Run {
       itemId,
     ]);
     this.seen.set(h.toString('hex'), new Date());
+  }
+
+  /** Mail older than fetch_since: remembered so it is never looked at again, but not downloaded. */
+  async markSkipped(key: string): Promise<void> {
+    const h = keyHash(key);
+    await exec(this.ctx.db, 'INSERT IGNORE INTO external_seen (account_id, remote_key_hash, remote_key, first_seen_at, item_id, skipped) VALUES (?,?,?,?,NULL,1)', [
+      this.acc.id,
+      h,
+      key.slice(0, 600),
+      new Date(),
+    ]);
+    this.seen.set(h.toString('hex'), new Date());
+    this.skippedKeys.add(h.toString('hex'));
+    this.result.skipped++;
+  }
+
+  /** Before the start date (by the time it reached the provider)? */
+  tooOld(arrived: Date | null): boolean {
+    const since = this.acc.fetch_since ? new Date(this.acc.fetch_since) : null;
+    return Boolean(since && arrived && arrived.getTime() < since.getTime());
   }
 
   async markDeleted(keys: string[]): Promise<void> {
@@ -156,11 +188,29 @@ class Run {
     return item?.id ?? null;
   }
 
-  shouldDeleteOld(first: Date | undefined): boolean {
+  shouldDeleteOld(key: string): boolean {
+    // Never delete provider mail that was skipped (PostMaster has no copy of it).
+    if (this.skippedKeys.has(keyHash(key).toString('hex'))) return false;
+    const first = this.firstSeen(key);
     if (this.acc.leave_policy === 'delete') return true;
     if (this.acc.leave_policy !== 'keep_days' || !first) return false;
     return Date.now() - first.getTime() >= this.acc.keep_days * 86400_000;
   }
+}
+
+/**
+ * When a message reached the provider: the date of the topmost Received: header
+ * (added by the provider on arrival), else the Date: header. Null when unknown,
+ * in which case the message is downloaded (never skip mail by guessing).
+ */
+export function arrivalDate(head: Buffer | string): Date | null {
+  const text = (typeof head === 'string' ? head : head.toString('latin1')).split(/\r?\n\r?\n/)[0]!.replace(/\r?\n[ \t]+/g, ' ');
+  const lines = text.split(/\r?\n/);
+  const received = lines.find((l) => /^received:/i.test(l));
+  const when = received?.includes(';') ? received.slice(received.lastIndexOf(';') + 1) : lines.find((l) => /^date:/i.test(l))?.slice(5);
+  if (!when) return null;
+  const t = Date.parse(when.trim().replace(/\s*\([^)]*\)\s*$/, ''));
+  return Number.isNaN(t) ? null : new Date(t);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +251,11 @@ async function fetchPop3(ctx: CoreContext, acc: ExternalAccount, password: strin
       const key = keyOf.get(n);
       if (!key) continue;
       if (run.isSeen(key)) {
-        if (run.shouldDeleteOld(run.firstSeen(key))) toDelete.push({ n, key });
+        if (run.shouldDeleteOld(key)) toDelete.push({ n, key });
+        continue;
+      }
+      if (acc.fetch_since && run.tooOld(arrivalDate(await c.top(n, 0)))) {
+        await run.markSkipped(key);
         continue;
       }
       if (downloaded >= opts.maxPerRun) {
@@ -307,8 +361,15 @@ async function fetchImap(ctx: CoreContext, acc: ExternalAccount, password: strin
           knownIds = new Set(have.map((x) => Buffer.from(x.h).toString('hex')));
         }
 
+        // "Download mail received from": the provider's arrival date (INTERNALDATE), by day.
+        const tooOld = new Set<number>(acc.fetch_since && fresh.length ? ((await client.search({ before: new Date(acc.fetch_since) }, { uid: true })) || []) : []);
+
         const toDelete: number[] = [];
         for (const uid of fresh) {
+          if (tooOld.has(uid)) {
+            await run.markSkipped(prefix + uid);
+            continue;
+          }
           if (downloaded >= opts.maxPerRun) {
             run.result.more = true;
             break;
@@ -338,7 +399,7 @@ async function fetchImap(ctx: CoreContext, acc: ExternalAccount, password: strin
         if (acc.leave_policy !== 'keep') {
           for (const uid of all) {
             if (toDelete.includes(uid) || !run.isSeen(prefix + uid)) continue;
-            if (run.shouldDeleteOld(run.firstSeen(prefix + uid))) toDelete.push(uid);
+            if (run.shouldDeleteOld(prefix + uid)) toDelete.push(uid);
           }
         }
         if (toDelete.length) {

@@ -48,5 +48,10 @@
     "version": 10,
     "file": "010_archive_mailboxes.sql",
     "sha256": "ec1a7d58f7078711e091e330e16fc1ba2f35d788afc51a8996cb74e1d8a96523"
+  },
+  {
+    "version": 11,
+    "file": "011_fetch_since.sql",
+    "sha256": "a3a5281a89b2b3c4eb08a797d3ad5d0e17ec18c959d217a9a782f5f7b9fab3f6"
   }
 ]

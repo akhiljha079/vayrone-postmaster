@@ -1,0 +1,8 @@
+Vayrone PostMaster 0.6.5
+
+New: "Download mail received from" (moving from another mail server, e.g. QLC PostMaster)
+- Each external mailbox can download only mail that reached the provider on or after a date.
+  Older mail stays at the provider untouched: never downloaded, never deleted.
+- Admin > External mailboxes > "Start date for all..." sets the switch-over day for every mailbox
+  at once, so Outlook does not get the old mail a second time.
+- Moving the date earlier later downloads the mail now in range, once, without duplicates.

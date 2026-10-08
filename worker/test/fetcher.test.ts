@@ -39,12 +39,12 @@ describe.skipIf(!dbConfig())('external POP3/IMAP fetcher', () => {
   const remoteCount = async (userId: number, folder = 'INBOX') => (await core.ctx.store.getFolder(userId, folder))!.message_count;
   const localCount = async () => (await core.ctx.store.getSpecialFolder(aliceId, 'inbox'))!.message_count;
 
-  async function addAccount(o: { protocol: 'pop3' | 'imap'; username: string; password?: string; port?: number; leave?: 'keep' | 'delete' | 'keep_days'; keepDays?: number; idle?: boolean; folders?: string[]; user?: number }): Promise<number> {
+  async function addAccount(o: { protocol: 'pop3' | 'imap'; username: string; password?: string; port?: number; leave?: 'keep' | 'delete' | 'keep_days'; keepDays?: number; idle?: boolean; folders?: string[]; user?: number; since?: Date }): Promise<number> {
     const now = new Date();
     const r = await exec(
       core.ctx.db,
       `INSERT INTO external_accounts (user_id, protocol, host, port, security, tls_verify, username, secret, remote_folders, interval_sec, use_idle,
-         leave_policy, keep_days, created_at, updated_at) VALUES (?,?,?,?,?,0,?,?,?,30,?,?,?,?,?)`,
+         leave_policy, keep_days, fetch_since, created_at, updated_at) VALUES (?,?,?,?,?,0,?,?,?,30,?,?,?,?,?,?)`,
       [
         o.user ?? aliceId,
         o.protocol,
@@ -57,6 +57,7 @@ describe.skipIf(!dbConfig())('external POP3/IMAP fetcher', () => {
         o.idle ? 1 : 0,
         o.leave ?? 'keep',
         o.keepDays ?? 14,
+        o.since ?? null,
         now,
         now,
       ],
@@ -157,6 +158,47 @@ describe.skipIf(!dbConfig())('external POP3/IMAP fetcher', () => {
     expect(await lastRun(imap)).toMatchObject({ fetched: 0, duplicates: 2 });
     expect(await localCount()).toBe(before + 2);
   });
+
+  /** Provider mail dated `date` (POP3 reads the Date header; IMAP the arrival date, set below). */
+  async function putDated(userId: number, subject: string, date: Date): Promise<void> {
+    const f = (await core.ctx.store.getFolder(userId, 'INBOX'))!;
+    const raw = `From: Client <client@outside.test>\r\nTo: x@${prov}\r\nSubject: ${subject}\r\nMessage-ID: <${randomBytes(6).toString('hex')}@outside.test>\r\nDate: ${date.toUTCString()}\r\n\r\nBody\r\n`;
+    const message = await core.ctx.store.ingest(Buffer.from(raw));
+    const r = await core.ctx.store.append({ userId, folderId: f.id, message, origin: 'internal' });
+    await exec(core.ctx.db, 'UPDATE mail_items SET internal_date = ? WHERE folder_id = ? AND uid = ?', [date, f.id, r.uid]);
+  }
+  const localSubjects = async () =>
+    (await rows<{ s: string }>(core.ctx.db, "SELECT m.hdr_subject s FROM mail_items i JOIN messages m ON m.id = i.message_id JOIN folders f ON f.id = i.folder_id WHERE i.user_id = ? AND f.special_use = 'inbox'", [aliceId])).map((r) => r.s);
+
+  for (const protocol of ['pop3', 'imap'] as const) {
+    it(`${protocol.toUpperCase()}, "download mail received from": older provider mail is skipped and never deleted`, async () => {
+      const box = await remoteBox(0);
+      const day = (d: string) => new Date(`${d}T09:00:00Z`);
+      await putDated(box.userId, `${protocol} old 1`, day('2026-08-01'));
+      await putDated(box.userId, `${protocol} old 2`, day('2026-09-15'));
+      await putDated(box.userId, `${protocol} new 1`, day('2026-10-02'));
+      // Delete-after-download policy: only the downloaded message may disappear from the provider.
+      const id = await addAccount({ protocol, username: box.email, leave: 'delete', since: new Date('2026-10-01T00:00:00') });
+      await runOnce(id);
+      let mine = (await localSubjects()).filter((s) => s.startsWith(`${protocol} `));
+      expect(mine).toEqual([`${protocol} new 1`]);
+      expect(await remoteCount(box.userId)).toBe(2); // the two old ones stay at the provider
+      // New mail keeps arriving normally; old mail is not looked at again.
+      await putDated(box.userId, `${protocol} new 2`, new Date());
+      await runOnce(id);
+      mine = (await localSubjects()).filter((s) => s.startsWith(`${protocol} `));
+      expect(mine.sort()).toEqual([`${protocol} new 1`, `${protocol} new 2`]);
+      expect(await remoteCount(box.userId)).toBe(2);
+      // Moving the date earlier (what the API does): the skipped mail now in range arrives, once.
+      await exec(core.ctx.db, 'UPDATE external_accounts SET fetch_since = ? WHERE id = ?', [new Date('2026-09-01T00:00:00'), id]);
+      await exec(core.ctx.db, 'DELETE FROM external_seen WHERE account_id = ? AND skipped = 1', [id]);
+      await exec(core.ctx.db, 'UPDATE external_imap_state SET last_uid = 0 WHERE account_id = ?', [id]);
+      await runOnce(id);
+      mine = (await localSubjects()).filter((s) => s.startsWith(`${protocol} `));
+      expect(mine.sort()).toEqual([`${protocol} new 1`, `${protocol} new 2`, `${protocol} old 2`]);
+      expect(await remoteCount(box.userId)).toBe(1); // only "old 1" (August) is left, untouched
+    });
+  }
 
   it('IMAP: STARTTLS, incremental UIDs, delete policy expunges remotely', async () => {
     const box = await remoteBox(2);

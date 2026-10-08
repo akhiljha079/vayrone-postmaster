@@ -50,10 +50,18 @@ Each employee's mailbox at the provider (Zoho, Hostinger, GoDaddy, cPanel, Micro
 | Folders | IMAP only: which provider folders to fetch |
 | Interval | How often to check; with IMAP IDLE, new mail arrives within seconds |
 | Leave on server | Keep mail at the provider, delete it after fetching, or keep it N days |
+| Download mail received | *All mail at the provider*, or *From a date*: only mail that reached the provider on or after that date is downloaded |
 
 Use **Test** to check a connection before saving. The list shows each account's live status. *Wrong password* and *mailbox full* also raise alerts.
 
 **Duplicates are suppressed.** A message fetched twice (for example after a provider-side restore) is delivered only once.
+
+**Moving from another mail server (for example QLC PostMaster).**
+- **Why a start date:** the PCs already hold the old mail, usually in Outlook's PST, and the provider often still keeps a copy of it. Without a start date, PostMaster downloads all of that old mail, and Outlook shows it a second time.
+- **One date for everyone:** click **Start date for all…** at the top of *External mailboxes* and choose the switch-over day. Each mailbox's *Edit* form has the same choice.
+- **Older mail is left alone:** it stays at the provider, untouched. It is never downloaded, and *After download → delete* never removes it, because PostMaster has no copy.
+- **Moving the date earlier later on:** the mail that now falls in the range is downloaded once, without duplicates.
+- **The old history:** it stays in Outlook's old account or PST. Drag folders into the new account if they should live on the server and in the archive.
 
 ## 5. Outgoing mail: SMTP relay and queue
 

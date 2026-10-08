@@ -25,6 +25,16 @@ export const PROVIDER_PRESETS = [
   { key: 'custom', name: 'Other / custom', imap: ['', 993, 'tls'], pop3: ['', 995, 'tls'], smtp: ['', 465, 'tls'] },
 ] as const;
 
+const FetchSince = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-08');
+/** Start of that day on this server's clock (the provider's arrival dates are compared to it). */
+const sinceDate = (d: string | null | undefined) => (d ? new Date(`${d}T00:00:00`) : null);
+/** Back to YYYY-MM-DD on the same (server) clock, so the date shown is the date chosen. */
+const sinceText = (v: unknown) => {
+  if (!v) return null;
+  const d = new Date(v as string | Date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const Body = z.object({
   userId: Id,
   label: z.string().trim().max(100).nullable().optional(),
@@ -47,6 +57,8 @@ const Body = z.object({
   smtpPort: z.number().int().min(1).max(65535).nullable().optional(),
   smtpSecurity: Security.nullable().optional(),
   isEnabled: z.boolean().default(true),
+  /** "Download mail received from" (YYYY-MM-DD, server local time); null = all mail at the provider. */
+  fetchSince: FetchSince.nullable().optional(),
 });
 
 const COLS: Record<string, string> = {
@@ -77,7 +89,7 @@ const LIST_SQL = `SELECT e.id, e.user_id AS userId, u.login AS userLogin, u.disp
     e.leave_policy AS leavePolicy, e.keep_days AS keepDays, e.can_send_as AS canSendAs, e.smtp_host AS smtpHost, e.smtp_port AS smtpPort,
     e.smtp_security AS smtpSecurity, e.is_enabled AS isEnabled, e.status, e.last_error AS lastError, e.last_success_at AS lastSuccessAt,
     e.last_attempt_at AS lastAttemptAt, e.next_run_at AS nextRunAt, e.consecutive_fails AS consecutiveFails, e.fetched_total AS fetchedTotal,
-    e.remote_count AS remoteCount, e.remote_bytes AS remoteBytes, e.idle_active AS idleActive
+    e.remote_count AS remoteCount, e.remote_bytes AS remoteBytes, e.idle_active AS idleActive, e.fetch_since AS fetchSince
   FROM external_accounts e JOIN users u ON u.id = e.user_id LEFT JOIN folders f ON f.id = e.target_folder_id`;
 
 export function externalRoutes(ctx: CoreContext) {
@@ -91,7 +103,14 @@ export function externalRoutes(ctx: CoreContext) {
     return f.id;
   }
 
-  const shape = (r: Record<string, unknown>) => ({ ...r, remoteFolders: dbm.json<string[] | null>(r.remoteFolders) ?? null, targetFolder: r.targetFolder ?? 'INBOX' });
+  /** A new start date: mail skipped under the old date is looked at again (downloaded only if now in range). */
+  async function resetSkipped(ids: number[]): Promise<void> {
+    if (!ids.length) return;
+    await exec(ctx.db, 'DELETE FROM external_seen WHERE account_id IN (?) AND skipped = 1', [ids]);
+    await exec(ctx.db, 'UPDATE external_imap_state SET last_uid = 0 WHERE account_id IN (?)', [ids]);
+  }
+
+  const shape = (r: Record<string, unknown>) => ({ ...r, fetchSince: sinceText(r.fetchSince), remoteFolders: dbm.json<string[] | null>(r.remoteFolders) ?? null, targetFolder: r.targetFolder ?? 'INBOX' });
 
   return async (app: FastifyInstance) => {
     app.get('/external-accounts/presets', { preHandler: read }, async () => PROVIDER_PRESETS);
@@ -130,8 +149,8 @@ export function externalRoutes(ctx: CoreContext) {
       const r = await exec(
         ctx.db,
         `INSERT INTO external_accounts (user_id, label, provider_preset, protocol, host, port, security, tls_verify, username, secret, remote_folders,
-           target_folder_id, interval_sec, use_idle, leave_policy, keep_days, can_send_as, smtp_host, smtp_port, smtp_security, is_enabled, status,
-           next_run_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           target_folder_id, interval_sec, use_idle, leave_policy, keep_days, fetch_since, can_send_as, smtp_host, smtp_port, smtp_security, is_enabled, status,
+           next_run_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           b.userId,
           b.label ?? null,
@@ -149,6 +168,7 @@ export function externalRoutes(ctx: CoreContext) {
           b.useIdle ? 1 : 0,
           b.leavePolicy,
           b.keepDays,
+          sinceDate(b.fetchSince),
           b.canSendAs ? 1 : 0,
           b.smtpHost || null,
           b.smtpPort ?? null,
@@ -190,7 +210,12 @@ export function externalRoutes(ctx: CoreContext) {
         sets.push('target_folder_id = ?');
         vals.push(await folderId(cur.user_id, b.targetFolder));
       }
-      const reconnect = CONNECTION_FIELDS.some((k) => (b as Record<string, unknown>)[k] !== undefined);
+      if (b.fetchSince !== undefined) {
+        sets.push('fetch_since = ?');
+        vals.push(sinceDate(b.fetchSince));
+        await resetSkipped([id]);
+      }
+      const reconnect = CONNECTION_FIELDS.some((k) => (b as Record<string, unknown>)[k] !== undefined) || b.fetchSince !== undefined;
       const enabled = b.isEnabled ?? Boolean(cur.is_enabled);
       if (!enabled) sets.push("status = 'disabled'", 'next_run_at = NULL', 'idle_active = 0');
       else if (reconnect) sets.push("status = 'idle'", 'next_run_at = ?', 'consecutive_fails = 0', 'last_error = NULL');
@@ -199,6 +224,24 @@ export function externalRoutes(ctx: CoreContext) {
       if (reconnect) for (const k of ['auth', 'fail']) await resolveAlert(ctx.db, `ext.${k}.${id}`);
       await audit(ctx, req, 'external.update', 'external_account', id, { ...b, password: b.password ? 'changed' : undefined });
       return { ok: true };
+    });
+
+    /** One start date for many mailboxes (e.g. moving a whole office from another mail server). */
+    app.post('/external-accounts/fetch-since', { preHandler: write }, async (req) => {
+      const b = z.object({ fetchSince: FetchSince.nullable(), accountIds: z.array(Id).max(10_000).optional() }).parse(req.body);
+      const ids = b.accountIds?.length
+        ? (await rows<{ id: number }>(ctx.db, 'SELECT id FROM external_accounts WHERE id IN (?)', [b.accountIds])).map((r) => r.id)
+        : (await rows<{ id: number }>(ctx.db, 'SELECT id FROM external_accounts')).map((r) => r.id);
+      if (!ids.length) return { updated: 0 };
+      await exec(ctx.db, "UPDATE external_accounts SET fetch_since = ?, next_run_at = IF(is_enabled = 1 AND status <> 'auth_failed', ?, next_run_at), updated_at = ? WHERE id IN (?)", [
+        sinceDate(b.fetchSince),
+        new Date(),
+        new Date(),
+        ids,
+      ]);
+      await resetSkipped(ids);
+      await audit(ctx, req, 'external.fetch_since', 'external_account', null, { fetchSince: b.fetchSince, accounts: ids.length });
+      return { updated: ids.length };
     });
 
     app.delete<{ Params: { id: string } }>('/external-accounts/:id', { preHandler: write }, async (req) => {

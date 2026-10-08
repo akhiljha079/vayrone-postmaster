@@ -25,6 +25,8 @@ interface Account {
   useIdle: number;
   leavePolicy: 'delete' | 'keep' | 'keep_days';
   keepDays: number;
+  /** "Download mail received from" (YYYY-MM-DD); null = all mail at the provider. */
+  fetchSince: string | null;
   isEnabled: number;
   status: string;
   lastError: string | null;
@@ -69,6 +71,56 @@ const STATUS: Record<string, { label: string; color: 'green' | 'red' | 'amber' |
 
 const LEAVE_LABEL = { keep_days: 'Leave a copy, delete after N days', keep: 'Leave a copy on the server', delete: 'Delete from the server after download' };
 
+/** Today as YYYY-MM-DD on this computer's clock. */
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** One start date for all mailboxes: the day the office switches to PostMaster. */
+function StartDateModal({ count, onClose, onDone }: { count: number; onClose: () => void; onDone: (n: number) => void }) {
+  const [mode, setMode] = useState<'since' | 'all'>('since');
+  const [date, setDate] = useState(todayIso());
+  const apply = useAction(async () => {
+    const r = await post<{ updated: number }>('/api/admin/external-accounts/fetch-since', { fetchSince: mode === 'since' ? date : null });
+    onDone(r.updated);
+  });
+  return (
+    <Modal
+      open
+      title="Start date for all mailboxes"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button busy={apply.busy} disabled={mode === 'since' && !date} onClick={() => void apply.run()}>
+            Apply to {count} mailbox{count === 1 ? '' : 'es'}
+          </Button>
+        </>
+      }
+    >
+      <ErrorBanner error={apply.error} />
+      <p className="text-sm text-slate-600">
+        Moving the office from another mail server (such as QLC PostMaster), where the PCs already hold the old mail? Set the switch-over date. PostMaster then downloads only mail received on or after it, so Outlook does
+        not get the old mail again.
+      </p>
+      <Field label="Download">
+        <Select value={mode} onChange={(e) => setMode(e.target.value as 'since' | 'all')}>
+          <option value="since">Mail received from a date</option>
+          <option value="all">All mail at the provider</option>
+        </Select>
+      </Field>
+      {mode === 'since' && (
+        <Field label="Received on or after" hint="Older mail stays at the provider untouched: never downloaded, never deleted.">
+          <Input type="date" value={date} max={todayIso()} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+      )}
+    </Modal>
+  );
+}
+
 function StatusBadge({ a }: { a: Account }) {
   const s = a.isEnabled ? (STATUS[a.status] ?? { label: a.status, color: 'slate' as const }) : STATUS.disabled!;
   return <Badge color={s.color}>{s.label}</Badge>;
@@ -95,6 +147,8 @@ function AccountModal({ acc, presets, defaultUserId, onClose, onSaved }: { acc: 
     useIdle: x ? Boolean(x.useIdle) : true,
     leavePolicy: x?.leavePolicy ?? ('keep_days' as Account['leavePolicy']),
     keepDays: String(x?.keepDays ?? 14),
+    fetchMode: x?.fetchSince ? 'since' : 'all',
+    fetchSince: x?.fetchSince ?? todayIso(),
     isEnabled: x ? Boolean(x.isEnabled) : true,
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((s) => ({ ...s, [k]: v }));
@@ -134,6 +188,8 @@ function AccountModal({ acc, presets, defaultUserId, onClose, onSaved }: { acc: 
     useIdle: f.useIdle,
     leavePolicy: f.leavePolicy,
     keepDays: Number(f.keepDays),
+    // Sent only when it changes: a new start date re-checks the mail skipped under the old one.
+    ...(isNew || (f.fetchMode === 'since' ? f.fetchSince : null) !== (x?.fetchSince ?? null) ? { fetchSince: f.fetchMode === 'since' ? f.fetchSince : null } : {}),
     isEnabled: f.isEnabled,
   });
   const save = useAction(async () => {
@@ -245,6 +301,17 @@ function AccountModal({ acc, presets, defaultUserId, onClose, onSaved }: { acc: 
             <Input type="number" min={1} value={f.keepDays} onChange={(e) => set('keepDays', e.target.value)} />
           </Field>
         )}
+        <Field label="Download mail received" hint="Moving from another mail server (e.g. QLC PostMaster)? Choose the switch-over date, so mail the PCs already have is not downloaded again.">
+          <Select value={f.fetchMode} onChange={(e) => set('fetchMode', e.target.value as 'all' | 'since')}>
+            <option value="all">All mail at the provider</option>
+            <option value="since">From a date</option>
+          </Select>
+        </Field>
+        {f.fetchMode === 'since' && (
+          <Field label="From (received on or after)" hint="Older mail stays at the provider untouched; it is never downloaded or deleted.">
+            <Input type="date" value={f.fetchSince} max={todayIso()} onChange={(e) => set('fetchSince', e.target.value)} />
+          </Field>
+        )}
       </div>
       {preset?.note && <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">{preset.note.replace('{domain}', (f.username.split('@')[1] ?? 'domain'))}</p>}
       <div className="grid gap-3 sm:grid-cols-3">
@@ -292,6 +359,8 @@ export function ExternalPage() {
   const list = useResource(() => get<{ items: Account[]; summary: Record<string, number>; max: number | null }>(`/api/admin/external-accounts${userFilter ? `?userId=${userFilter}` : ''}`), [userFilter, tick]);
   const presets = useResource(() => get<Preset[]>('/api/admin/external-accounts/presets'));
   const [editing, setEditing] = useState<Account | 'new' | null>(null);
+  const [startDate, setStartDate] = useState(false);
+  const [startNote, setStartNote] = useState<string | null>(null);
   const [history, setHistory] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [ask, confirmNode] = useConfirm();
@@ -315,8 +384,18 @@ export function ExternalPage() {
       <PageHeader
         title="External mailboxes"
         description="Provider mailboxes (Hostinger, GoDaddy, Zoho, cPanel…) fetched into each employee's office mailbox."
-        actions={<Button onClick={() => setEditing('new')}>Connect mailbox</Button>}
+        actions={
+          <>
+            {(list.data?.items.length ?? 0) > 0 && (
+              <Button variant="secondary" onClick={() => setStartDate(true)}>
+                Start date for all…
+              </Button>
+            )}
+            <Button onClick={() => setEditing('new')}>Connect mailbox</Button>
+          </>
+        }
       />
+      {startNote && <div className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-200">{startNote}</div>}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Badge color="green">{(s.idle ?? 0) + (s.idling ?? 0)} OK</Badge>
         <Badge color="blue">{s.idling ?? 0} with instant push</Badge>
@@ -344,6 +423,7 @@ export function ExternalPage() {
                     <span className="uppercase">{a.protocol}</span> · {a.host}
                     {a.label && ` · ${a.label}`}
                   </div>
+                  {a.fetchSince && <div className="text-xs text-slate-500">Mail from {new Date(`${a.fetchSince}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>}
                 </Td>
                 <Td className="max-w-xs">
                   <StatusBadge a={a} />
@@ -387,6 +467,17 @@ export function ExternalPage() {
           </Table>
         )}
       </Card>
+      {startDate && (
+        <StartDateModal
+          count={list.data?.items.length ?? 0}
+          onClose={() => setStartDate(false)}
+          onDone={(n) => {
+            setStartDate(false);
+            setStartNote(`Start date saved for ${n} mailbox${n === 1 ? '' : 'es'}. They are being checked now.`);
+            list.reload();
+          }}
+        />
+      )}
       {editing && presets.data && (
         <AccountModal
           acc={editing}

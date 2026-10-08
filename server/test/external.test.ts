@@ -94,6 +94,28 @@ describe.skipIf(!dbConfig())('external accounts admin API', () => {
     maxExt = null;
   });
 
+  it('"download mail received from": saved, shown, re-checks skipped mail when changed, and settable for all at once', async () => {
+    const id = (await a.post('/api/admin/external-accounts', body({ fetchSince: '2026-10-01' }))).json().id;
+    const get = async () => (await a.get(`/api/admin/external-accounts/${id}`)).json();
+    expect((await get()).fetchSince).toBe('2026-10-01');
+    expect((await a.post('/api/admin/external-accounts', body({ fetchSince: '1 Oct' }))).statusCode).toBe(400);
+    // Mail skipped under the old date is looked at again after a change.
+    await dbm.exec(ctx.db, 'INSERT INTO external_seen (account_id, remote_key_hash, remote_key, first_seen_at, skipped) VALUES (?, UNHEX(SHA2(?, 256)), ?, NOW(3), 1)', [id, `k${id}`, `pop3:k${id}`]);
+    expect((await a.patch(`/api/admin/external-accounts/${id}`, { fetchSince: '2026-09-01' })).statusCode).toBe(200);
+    expect((await get()).fetchSince).toBe('2026-09-01');
+    expect(Number((await dbm.one<{ n: number }>(ctx.db, 'SELECT COUNT(*) n FROM external_seen WHERE account_id = ? AND skipped = 1', [id]))!.n)).toBe(0);
+    // Saving other settings does not touch the date.
+    await a.patch(`/api/admin/external-accounts/${id}`, { intervalSec: 60 });
+    expect((await get()).fetchSince).toBe('2026-09-01');
+    // One date for every mailbox (moving a whole office), and back to "all mail".
+    const all = (await a.post('/api/admin/external-accounts/fetch-since', { fetchSince: '2026-10-08' })).json();
+    expect(all.updated).toBeGreaterThanOrEqual(1);
+    const list = (await a.get('/api/admin/external-accounts')).json().items as { fetchSince: string | null }[];
+    expect(list.every((x) => x.fetchSince === '2026-10-08')).toBe(true);
+    await a.post('/api/admin/external-accounts/fetch-since', { fetchSince: null, accountIds: [id] });
+    expect((await get()).fetchSince).toBeNull();
+  });
+
   it('serves provider presets', async () => {
     const p = (await a.get('/api/admin/external-accounts/presets')).json() as { key: string }[];
     expect(p.map((x) => x.key)).toEqual(expect.arrayContaining(['hostinger', 'godaddy', 'zoho_in', 'cpanel', 'custom']));

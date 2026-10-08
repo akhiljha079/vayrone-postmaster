@@ -102,6 +102,8 @@ At the end, the browser opens the **setup wizard**. It walks through eight steps
 
 ## 5. Move employees to the office server (go-live)
 
+**Coming from another mail server (for example QLC PostMaster)?** Before go-live, open Admin → External mailboxes → **Start date for all…** and choose the switch-over day. PostMaster then downloads only new mail, so Outlook does not get years of old mail a second time. The old mail stays in each PC's Outlook (PST) and at the provider.
+
 Do this department by department, or all at once on a quiet day.
 
 1. **Install the server certificate on each PC** (once, by Group Policy or by hand). This applies only if the server uses a self-signed certificate. See [mail-clients.md](mail-clients.md#trusting-the-servers-certificate-self-signed).
