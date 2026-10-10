@@ -6,9 +6,9 @@ const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).jo
 // ---------------------------------------------------------------- buttons
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 const VARIANT: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-600/50',
-  secondary: 'bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50 disabled:text-slate-400',
-  danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-600/50',
+  primary: 'bg-brand-600 text-white shadow-sm hover:bg-brand-700 disabled:bg-brand-600/50',
+  secondary: 'bg-white text-slate-700 shadow-sm ring-1 ring-slate-300 hover:bg-slate-50 disabled:text-slate-400',
+  danger: 'bg-red-600 text-white shadow-sm hover:bg-red-700 disabled:bg-red-600/50',
   ghost: 'text-slate-600 hover:bg-slate-100 disabled:text-slate-300',
 };
 
@@ -18,7 +18,7 @@ export function Button({ variant = 'primary', busy, className, children, ...p }:
       type="button"
       {...p}
       disabled={p.disabled || busy}
-      className={cx('inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed', VARIANT[variant], className)}
+      className={cx('inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed sm:min-h-8', VARIANT[variant], className)}
     >
       {busy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />}
       {children}
@@ -38,7 +38,7 @@ export function Field({ label, hint, error, children, className }: { label: stri
   );
 }
 
-const inputBase = 'block rounded-md border-0 px-2.5 py-1.5 text-sm text-slate-900 ring-1 ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500';
+const inputBase = 'block min-h-10 rounded-md border-0 bg-white px-2.5 py-1.5 text-sm shadow-sm sm:min-h-9 text-slate-900 ring-1 ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-brand-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500';
 /** Full width unless the caller sets a width (cx does not resolve conflicting Tailwind classes). */
 const inputCls = (extra?: string) => cx(inputBase, /(^|\s)w-/.test(extra ?? '') ? '' : 'w-full', extra);
 
@@ -79,26 +79,26 @@ export function Toggle({ checked, onChange, label, disabled }: { checked: boolea
 // ---------------------------------------------------------------- layout
 export function Card({ title, actions, children, className }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cx('rounded-lg bg-white shadow-sm ring-1 ring-slate-200', className)}>
+    <section className={cx('min-w-0 rounded-xl bg-white shadow-sm ring-1 ring-slate-200/80', className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5">
           <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
-          <div className="flex items-center gap-2">{actions}</div>
+          <div className="flex flex-wrap items-center gap-2">{actions}</div>
         </header>
       )}
-      <div className="p-4">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
 
 export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+    <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+        {description && <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -136,45 +136,59 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-slate-200 text-sm">
-        <thead>
+        <thead className="bg-slate-50/80">
           <tr>
             {head.map((h, i) => (
-              <th key={i} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th key={i} className="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">{children}</tbody>
+        <tbody className="divide-y divide-slate-100 [&>tr:hover]:bg-slate-50/60">{children}</tbody>
       </table>
     </div>
   );
 }
 
-export const Td = ({ className, ...p }: React.TdHTMLAttributes<HTMLTableCellElement>) => <td {...p} className={cx('px-3 py-2 align-top', className)} />;
+export const Td = ({ className, ...p }: React.TdHTMLAttributes<HTMLTableCellElement>) => <td {...p} className={cx('px-3 py-2.5 align-top', className)} />;
 
 // ---------------------------------------------------------------- modal
 export function Modal({ open, title, onClose, children, footer, wide }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Parents pass a new onClose on every render (pages refresh every few seconds): keep it in a ref,
+  // so focus moves to the first field only when the dialog opens, never while someone is typing.
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close.current();
     window.addEventListener('keydown', onKey);
-    ref.current?.querySelector<HTMLElement>('input,select,textarea')?.focus();
+    ref.current?.querySelector<HTMLElement>('input:not([disabled]),select:not([disabled]),textarea:not([disabled])')?.focus();
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 sm:p-10" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cx('w-full rounded-lg bg-white shadow-xl', wide ? 'max-w-3xl' : 'max-w-lg')}>
-        <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 backdrop-blur-[1px] sm:items-start sm:overflow-y-auto sm:p-10" onMouseDown={(e) => e.target === e.currentTarget && close.current()}>
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className={cx('flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-2xl sm:max-h-none sm:rounded-xl', wide ? 'sm:max-w-3xl' : 'sm:max-w-lg')}
+      >
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
           <h2 className="font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
+          <button onClick={() => close.current()} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Close">
             ✕
           </button>
         </header>
-        <div className="space-y-4 px-5 py-4">{children}</div>
-        {footer && <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">{footer}</footer>}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:overflow-visible sm:px-5">{children}</div>
+        {footer && (
+          <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-xl sm:px-5">
+            {footer}
+          </footer>
+        )}
       </div>
     </div>
   );

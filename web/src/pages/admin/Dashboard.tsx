@@ -13,9 +13,9 @@ interface Dash {
 
 function Stat({ label, value, sub, to }: { label: string; value: string | number; sub?: string; to?: string }) {
   const body = (
-    <div className="rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:ring-brand-300">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular text-slate-900">{value}</div>
+    <div className="relative h-full overflow-hidden rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200/80 transition before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-accent hover:shadow-md sm:p-5">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">{label}</div>
+      <div className="mt-1 text-xl font-semibold tabular text-slate-900 sm:text-2xl">{value}</div>
       {sub && <div className="mt-0.5 text-xs text-slate-500">{sub}</div>}
     </div>
   );
@@ -33,7 +33,7 @@ export function Dashboard() {
       <ErrorBanner error={d.error} />
       {x && (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Stat label="Licensed mailboxes" value={x.users.maxLicensed ? `${x.users.licensed} / ${x.users.maxLicensed}` : x.users.licensed} sub={`${x.users.total} accounts in total`} to="/admin/users" />
             <Stat label="Outgoing queue" value={waiting} sub={`${x.queue.deferred ?? 0} retrying · ${x.queue.held ?? 0} held · ${x.queue.failed ?? 0} failed`} to="/admin/queue" />
             <Stat label="Mail storage" value={formatBytes(x.storage.bytes)} sub={`${x.storage.messages.toLocaleString('en-IN')} stored messages`} />

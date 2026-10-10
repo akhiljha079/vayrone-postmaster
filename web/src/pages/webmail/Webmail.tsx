@@ -352,7 +352,7 @@ export function Webmail() {
   const isTrash = folder?.specialUse === 'trash' || folder?.specialUse === 'junk';
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <div className="hidden md:flex">
         <FolderPane data={folders} current={current} onSelect={(id) => (setCurrent(id), setQ(''), setQuery(''))} onCompose={() => setCompose({})} onChanged={() => void loadFolders()} onDropMessages={(ids, folderId) => void act('move', ids, folderId)} live={live} />
       </div>

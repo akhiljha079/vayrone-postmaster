@@ -131,7 +131,7 @@ export function SecurityPage() {
           ) : (
             <div className="space-y-4">
               <ErrorBanner error={savePolicy.error} />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Lock account after failed attempts">{num('lockoutThreshold')}</Field>
                 <Field label="Lock for (minutes)">{num('lockoutMinutes')}</Field>
                 <Field label="Sign out after inactivity (minutes)">{num('sessionIdleMinutes')}</Field>
@@ -195,7 +195,7 @@ export function SecurityPage() {
           )}
           {isSuper && (
             <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="IP address or range">
                   <Input value={rule.cidr} onChange={(e) => setRule({ ...rule, cidr: e.target.value })} placeholder="192.168.1.0/24" />
                 </Field>

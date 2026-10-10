@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './styles.css';
 import { AuthProvider, useAuth } from './auth';
-import { AdminMobileNav, AdminSidebar, Shell } from './components/Layout';
+import { AdminSidebar, Shell } from './components/Layout';
 import { Spinner } from './components/ui';
 import { Login } from './pages/Login';
 import { MailHome } from './pages/Mail';
@@ -33,10 +33,7 @@ function Admin({ children }: { children: ReactNode }) {
   if (state.status !== 'ready') return null;
   if (!state.me.canUseAdmin) return <Navigate to="/mail" replace />;
   return (
-    <Shell sidebar={<AdminSidebar />}>
-      <AdminMobileNav />
-      {children}
-    </Shell>
+    <Shell sidebar={<AdminSidebar />}>{children}</Shell>
   );
 }
 

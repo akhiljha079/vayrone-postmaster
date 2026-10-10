@@ -201,7 +201,7 @@ export function JournalPage() {
         <Field label="Name">
           <Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Compliance copy of all mail" />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Which mail">
             <Select value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value as 'both' })}>
               {Object.entries(DIR_LABEL).map(([k, v]) => (

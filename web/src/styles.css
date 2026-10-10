@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  --color-brand-700: #1e40af;
-  --color-brand-900: #1e3a8a;
-  --color-accent: #0ea5e9;
+  /* Vayrone PostMaster logo: navy and orange. */
+  --color-brand-50: #eef3fa;
+  --color-brand-100: #d9e3f2;
+  --color-brand-500: #2d5aa0;
+  --color-brand-600: #1f4683;
+  --color-brand-700: #17376a;
+  --color-brand-900: #0b1b35;
+  --color-accent: #ff6b0a;
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif;
 }
 
@@ -21,4 +22,18 @@ body {
 }
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Phones: 16 px form text stops iOS from zooming into fields. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+/* Thin scrollbars in panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
 }

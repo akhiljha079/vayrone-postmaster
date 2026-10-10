@@ -1,0 +1,10 @@
+Vayrone PostMaster 1.0.2
+
+- Fixed: when connecting an external mailbox, "Deliver into the mailbox of" changed by itself a few
+  seconds after choosing another user. Dialogs no longer move the cursor while the page refreshes.
+- Works on phones and tablets: slide-out admin menu, full-screen dialogs on phones, forms that stack,
+  scrolling tables, larger touch targets, no zoom-in on iPhone form fields.
+- New look in the Vayrone PostMaster colours: navy header with orange accent, grouped admin menu
+  (Overview, Mailboxes, Mail flow, Data, Security & system), cleaner cards, tables and dashboard.
+
+For licences and purchase: info@vayrone.com

@@ -241,7 +241,7 @@ function Settings() {
               <Input value={f.spam.rspamdUrl} disabled={!owner} onChange={(e) => set('spam', { ...f.spam, rspamdUrl: e.target.value })} />
             </Field>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Move to Junk from score">
               <Input type="number" value={String(f.spam.junkScore)} disabled={!owner} onChange={(e) => set('spam', { ...f.spam, junkScore: Number(e.target.value) })} />
             </Field>
@@ -264,7 +264,7 @@ function Settings() {
           </Field>
           {f.antivirus.engine === 'clamav' && (
             <>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Host" className="col-span-2">
                   <Input value={f.antivirus.host} disabled={!owner} onChange={(e) => set('antivirus', { ...f.antivirus, host: e.target.value })} />
                 </Field>

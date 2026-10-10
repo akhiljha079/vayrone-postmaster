@@ -255,7 +255,7 @@ function AccountModal({ acc, presets, defaultUserId, onClose, onSaved }: { acc: 
             <option value="pop3">POP3</option>
           </Select>
         </Field>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           <Field label="Server" className="col-span-2">
             <Input value={f.host} onChange={(e) => set('host', e.target.value)} placeholder="imap.provider.com" />
           </Field>
@@ -419,7 +419,7 @@ export function ExternalPage() {
         <Badge color="blue">{s.idling ?? 0} with instant push</Badge>
         {problems > 0 && <Badge color="red">{problems} need attention</Badge>}
         {list.data?.max != null && <span className="text-slate-500">Licence: {list.data.items.filter((a) => a.isEnabled).length} of {list.data.max} accounts</span>}
-        <Input className="ml-auto max-w-xs" placeholder="Filter by user, account or server" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input className="w-full sm:ml-auto sm:max-w-xs" placeholder="Filter by user, account or server" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <ErrorBanner error={list.error} />
       <Card>

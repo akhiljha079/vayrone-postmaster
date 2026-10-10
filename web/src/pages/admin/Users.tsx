@@ -219,7 +219,7 @@ export function Users() {
             setQuery(q);
           }}
         >
-          <Input placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+          <Input placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} className="w-full sm:max-w-xs" />
           <Button type="submit" variant="secondary">
             Search
           </Button>

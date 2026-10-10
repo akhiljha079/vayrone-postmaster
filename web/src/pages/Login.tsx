@@ -28,7 +28,7 @@ export function Login() {
   };
 
   return (
-    <div className="flex min-h-full flex-col bg-gradient-to-br from-brand-900 via-brand-700 to-sky-600">
+    <div className="flex min-h-full flex-col bg-gradient-to-br from-brand-900 via-brand-700 to-brand-500">
       <div className="flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-sm">
           <div className="mb-6 text-center text-white">

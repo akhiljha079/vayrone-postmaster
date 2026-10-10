@@ -132,7 +132,7 @@ function RecipientInput({ label, value, onChange, autoFocus }: { label: string; 
         />
       </div>
       {suggest.length > 0 && (
-        <ul className="absolute left-14 top-full z-20 mt-1 w-80 rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-slate-200">
+        <ul className="absolute left-14 top-full z-20 mt-1 w-80 max-w-[calc(100vw-5rem)] rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-slate-200">
           {suggest.map((s, i) => (
             <li key={s.address}>
               <button type="button" onMouseDown={() => add(addrText(s))} className={`block w-full px-3 py-1.5 text-left ${i === active ? 'bg-brand-50' : 'hover:bg-slate-50'}`}>
