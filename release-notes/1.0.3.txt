@@ -1,0 +1,9 @@
+Vayrone PostMaster 1.0.3
+
+- Fixed: large outgoing mail (10 MB and more) kept failing with "Timeout" in the mail queue.
+  PostMaster now waits up to 10 minutes for the provider to accept a large message (providers scan
+  big attachments before answering), instead of 2 minutes.
+- Fixed: a message that took longer than 5 minutes to upload could be sent a second time in parallel.
+- Mail queue: "Sending now…" while a message is being sent, and the previous error shown as "Last try".
+
+For licences and purchase: info@vayrone.com

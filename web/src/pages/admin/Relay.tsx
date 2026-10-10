@@ -461,13 +461,14 @@ export function QueuePage() {
                   <Badge color={STATUS_COLOR[m.status] ?? 'slate'}>{m.status}</Badge>
                   {m.lastError && m.status !== 'sent' && (
                     <div className="mt-1 max-w-[16rem] truncate text-xs text-red-600" title={m.lastError}>
+                      {m.status === 'sending' ? 'Last try: ' : ''}
                       {m.lastError}
                     </div>
                   )}
                   {m.holdReason && <div className="mt-1 text-xs text-slate-500">{m.holdReason}</div>}
                 </Td>
                 <Td className="tabular">{m.attempts}</Td>
-                <Td className="whitespace-nowrap text-xs">{['queued', 'deferred'].includes(m.status) ? formatDate(m.nextAttemptAt) : '—'}</Td>
+                <Td className="whitespace-nowrap text-xs">{['queued', 'deferred'].includes(m.status) ? formatDate(m.nextAttemptAt) : m.status === 'sending' ? <span className="text-brand-700">Sending now…</span> : '—'}</Td>
                 <Td>
                   <Button variant="ghost" onClick={() => setDetail(m.id)}>
                     Details

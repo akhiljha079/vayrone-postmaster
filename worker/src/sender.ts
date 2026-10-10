@@ -13,6 +13,7 @@ const { exec, one, rows } = dbm;
 /** Minutes until the next attempt after attempt n (1-based); hourly afterwards. */
 export const RETRY_MINUTES = [1, 5, 15, 30, 60];
 const LOCK_MS = 5 * 60_000;
+const LOCK_RENEW_MS = 60_000;
 const NO_BOUNCE_SOURCES = new Set(['bounce', 'autoreply', 'journal']);
 
 interface QueueRow {
@@ -103,11 +104,18 @@ export class OutboundSender {
     const workers = Array.from({ length: Math.min(conc, claimed.length) }, async () => {
       while (i < claimed.length) {
         const q = claimed[i++]!;
+        // Keep the claim while a large message uploads, so no second attempt starts in parallel.
+        const renew = setInterval(
+          () => void exec(this.ctx.db, "UPDATE outbound_queue SET locked_until = ? WHERE id = ? AND locked_by = ? AND status = 'sending'", [new Date(Date.now() + LOCK_MS), q.id, token]).catch(() => undefined),
+          LOCK_RENEW_MS,
+        );
         try {
           await this.process(q);
         } catch (err) {
           this.ctx.log.error({ err, queueId: q.id }, 'relay processing failed');
           await this.defer(q, (err as Error).message);
+        } finally {
+          clearInterval(renew);
         }
       }
     });

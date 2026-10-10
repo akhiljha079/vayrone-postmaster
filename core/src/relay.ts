@@ -146,7 +146,9 @@ export function createTransport(t: RelayTarget, secrets: SecretBox, opts: { host
     tls: { rejectUnauthorized: t.tlsVerify, servername: t.host },
     connectionTimeout: 30_000,
     greetingTimeout: 30_000,
-    socketTimeout: 120_000,
+    // Large mail: after the upload the provider often scans it for minutes before answering.
+    // A short timeout here made every attempt fail with "Timeout" (and could deliver it twice).
+    socketTimeout: 10 * 60_000,
     ...(opts.pool ? { pool: true, maxConnections: t.maxConnections, maxMessages: 100 } : {}),
   } as TransportOptions);
 }
