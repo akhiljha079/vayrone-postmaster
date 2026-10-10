@@ -140,3 +140,20 @@ jobs:
           else
             gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --title "Vayrone PostMaster $V" --notes-file notes.md
           fi
+      # Public download repo (binaries only, no source): clients and updates.vayrone.com fetch from here.
+      # Needs the secret RELEASES_TOKEN: a fine-grained token with "Contents: read and write" on that repo only.
+      - name: Publish to the public download repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          DL_REPO: akhiljha079/vayrone-postmaster-releases
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "RELEASES_TOKEN not set: skipped"; exit 0; }
+          V=${TAG#v}
+          sed -i "s#https://github.com/$GITHUB_REPOSITORY/#https://github.com/$DL_REPO/#g" notes.md
+          if gh release view "$TAG" --repo "$DL_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/* --repo "$DL_REPO" --clobber
+            gh release edit "$TAG" --repo "$DL_REPO" --notes-file notes.md
+          else
+            gh release create "$TAG" out/* --repo "$DL_REPO" --title "Vayrone PostMaster $V" --notes-file notes.md --latest
+          fi
